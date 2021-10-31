@@ -90,20 +90,8 @@ def export_df_to_html(df, name = None):
     text_file.write(html)
     text_file.close()
 
-
-
-if __name__ == '__main__':
-    pd.set_option('display.max_columns', None)
-    control, patient = create_structure()
-
-    print(control)
-
-    #statsControl = statistics(control)
-    #statsPatient = statistics(patient)
-
-    #export_df_to_html(statsControl, "statsControl")
-    #export_df_to_html(statsPatient, "statsPatient")
-
+#
+def graph_timeserie():
     # graph
 
     userid = "patient_1"
@@ -111,6 +99,11 @@ if __name__ == '__main__':
 
     df_patient.plot(x="timestamp",y="activity")
     plt.show()
+
+
+def graph_patient_avg_by_hour():
+    userid = "patient_1"
+    df_patient = patient[userid]['timeserie']
 
 
     # the average value for each hour of the day
@@ -122,6 +115,8 @@ if __name__ == '__main__':
     plt.xlabel("Hour of the day");  # custom x label using matplotlib
     plt.ylabel("activity");
     plt.show()
+
+def graph_control_avg_by_hour():
 
     userid = "control_1"
     df_control = control[userid]['timeserie']
@@ -136,3 +131,43 @@ if __name__ == '__main__':
     plt.xlabel("Hour of the day");  # custom x label using matplotlib
     plt.ylabel("activity");
     plt.show()
+
+def graph_activity_by_period(control):
+    userid = "control_5"
+    df_control = control[userid]['timeserie']
+    df_control['datetime'] = pd.to_datetime(df_control['timestamp'])
+    df_control = df_control.set_index('datetime')
+    morning = df_control.between_time('6:00', '11:59')
+    afternoon = df_control.between_time('12:00', '17:59')
+    night = df_control.between_time('18:00', '23:59')
+
+
+    morning.plot(x="datetime",y="activity")
+    plt.xticks(rotation=30, horizontalalignment="center")
+    plt.show()
+
+
+def graph_activity_by_frequency():
+    #define activity ranges of each state below
+    deep_sleep = ""
+    sleep = ""
+    aw = ""
+
+
+
+
+if __name__ == '__main__':
+    pd.set_option('display.max_columns', None)
+    control, patient = create_structure()
+
+    print(control)
+
+    #statsControl = statistics(control)
+    #statsPatient = statistics(patient)
+
+    #export_df_to_html(statsControl, "statsControl")
+    #export_df_to_html(statsPatient, "statsPatient")
+
+    graph_activity_by_period(control)
+
+
