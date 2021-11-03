@@ -1,4 +1,10 @@
-#import matplotlib
+
+
+
+# ------------------------------------------
+# IMPORTS
+# ------------------------------------------
+import numpy
 import numpy as np
 import pandas as pd
 import glob
@@ -60,19 +66,53 @@ def create_structure():
 
 
 def statistics(control):
+    #structure
+    # userid - class - mean - sd - prop_zeros   -> day 1
+    # userid - class - mean - sd - prop_zeros   -> day 2
+
     df_stats = pd.DataFrame()
 
     for key in set(control.keys()).difference({'target'}):
         value = control[key]
 
         df = value['timeserie']
+        user_class = value['target']
 
-        desc = df['activity'].describe()
+        df["datetime"] = pd.to_datetime(df["timestamp"])
+        group_day = df.groupby(df["datetime"].dt.day)['activity']
 
-        s = pd.Series(key, index=['userid'])
-        desc = s.append(desc )
+        for daily_serie in group_day:
+            mean = daily_serie[1].mean()
+            sd = numpy.std(daily_serie[1])
 
-        df_stats = df_stats.append(desc, ignore_index=True  )
+            count_zero = np.where(daily_serie[1]==0)[0].size
+            daily_serie_size = daily_serie[1].size
+            proportion_zero = count_zero/daily_serie_size
+
+            row_day = {'userid': key, 'class': user_class.value, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero}
+            df_stats = df_stats.append(row_day, ignore_index=True )
+
+            print(f'{key} mean {mean} sd {sd} zeros {count_zero}, total {daily_serie_size} -> {proportion_zero}')
+
+
+
+        # countzeros = df.groupby(df["datetime"].dt.day)['activity'].apply(lambda x: (x == 0).sum()).reset_index(name='count')
+        # total_day = df.groupby(df["datetime"].dt.day)['activity'].count()
+        # print(key)
+        # for cz, total in zip(countzeros['count'].values, total_day):
+        #     print(f'zeros {cz}, total {total} -> {cz/total}')
+        #     proportion_zeros = cz/total
+        #
+
+
+
+
+        # desc = df['activity'].describe()
+        #
+        # s = pd.Series(key, index=['userid'])
+        # desc = s.append(desc )
+        #
+        # df_stats = df_stats.append(desc, ignore_index=True  )
 
     return df_stats
 
@@ -91,7 +131,7 @@ def export_df_to_html(df, name = None):
     text_file.close()
 
 #
-def graph_timeserie():
+def graph_timeserie(patient):
     # graph
 
     userid = "patient_1"
@@ -134,15 +174,18 @@ def graph_control_avg_by_hour():
 
 def graph_activity_by_period(control):
     userid = "control_5"
+
     df_control = control[userid]['timeserie']
     df_control['datetime'] = pd.to_datetime(df_control['timestamp'])
     df_control = df_control.set_index('datetime')
+
     morning = df_control.between_time('6:00', '11:59')
     afternoon = df_control.between_time('12:00', '17:59')
     night = df_control.between_time('18:00', '23:59')
 
-
-    morning.plot(x="datetime",y="activity")
+    #TODO define the periods of time
+    #morning
+    morning.plot(x="timestamp",y="activity")
     plt.xticks(rotation=30, horizontalalignment="center")
     plt.show()
 
@@ -162,11 +205,14 @@ if __name__ == '__main__':
 
     print(control)
 
-    #statsControl = statistics(control)
-    #statsPatient = statistics(patient)
+    #graph of entire timeserie of a given person
+    #graph_timeserie(patient)
 
-    #export_df_to_html(statsControl, "statsControl")
-    #export_df_to_html(statsPatient, "statsPatient")
+    statsControl = statistics(control)
+    statsPatient = statistics(patient)
+
+    export_df_to_html(statsControl, "statsControl")
+    export_df_to_html(statsPatient, "statsPatient")
 
     graph_activity_by_period(control)
 
