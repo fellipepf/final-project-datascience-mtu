@@ -24,6 +24,11 @@ def create_structure():
 
     return content_baseline
 
+# ------------------------------------------
+# FUNCTION stats_baseline_boxplot
+
+
+# ------------------------------------------
 def stats_baseline_boxplot(baseline):
     control = baseline.loc[baseline['class'] == 0]
 

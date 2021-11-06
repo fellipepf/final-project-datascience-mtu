@@ -13,6 +13,8 @@ import re
 from enum import Enum
 import matplotlib.pyplot as plt
 
+import my_baseline
+
 class Target(Enum):
     PATIENT = 1
     CONTROL = 0
@@ -64,12 +66,10 @@ def create_structure():
 
     return contentControl, contentPatient
 
-
-def statistics(control):
     #structure
     # userid - class - mean - sd - prop_zeros   -> day 1
     # userid - class - mean - sd - prop_zeros   -> day 2
-
+def generate_baseline(control):
     df_stats = pd.DataFrame()
 
     for key in set(control.keys()).difference({'target'}):
@@ -189,10 +189,10 @@ def graph_activity_by_period(control):
     plt.xticks(rotation=30, horizontalalignment="center")
     plt.show()
 
-
-def graph_activity_by_frequency():
+# https://scholarspace.manoa.hawaii.edu/bitstream/10125/64135/0317.pdf
+def graph_activity_by_frequency(time_serie):
     #define activity ranges of each state below
-    deep_sleep = ""
+    deep_sleep = 0
     sleep = ""
     aw = ""
 
@@ -203,16 +203,23 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     control, patient = create_structure()
 
-    print(control)
+    #print(control)
 
     #graph of entire timeserie of a given person
     #graph_timeserie(patient)
 
-    statsControl = statistics(control)
-    statsPatient = statistics(patient)
+    baselineControl = generate_baseline(control)
+    baselinePatient = generate_baseline(patient)
 
-    export_df_to_html(statsControl, "statsControl")
-    export_df_to_html(statsPatient, "statsPatient")
+
+
+    export_df_to_html(baselineControl, "statsControl")
+    export_df_to_html(baselinePatient, "statsPatient")
+
+    #baseline generated from the time series
+    join_baselines = pd.concat([baselineControl, baselinePatient])
+    my_baseline.stats_baseline_boxplot(join_baselines)
+
 
     graph_activity_by_period(control)
 
