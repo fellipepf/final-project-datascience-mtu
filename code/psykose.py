@@ -14,6 +14,7 @@ from enum import Enum
 import matplotlib.pyplot as plt
 
 import my_baseline
+from collected_days import DaysCollected
 
 class Target(Enum):
     PATIENT = 1
@@ -72,6 +73,9 @@ def create_structure():
 def generate_baseline(control):
     df_stats = pd.DataFrame()
 
+    col = DaysCollected()
+    days = col.get_days_collected()
+
     for key in set(control.keys()).difference({'target'}):
         value = control[key]
 
@@ -79,14 +83,18 @@ def generate_baseline(control):
         user_class = value['target']
 
         df["datetime"] = pd.to_datetime(df["timestamp"])
-        group_day = df.groupby(df["datetime"].dt.day)['activity']
+        #group_day = df.groupby(df["datetime"].dt.day)['activity']
 
-        for daily_serie in group_day:
-            mean = daily_serie[1].mean()
-            sd = numpy.std(daily_serie[1])
+        n_days_limit = days.loc[days['id'] == key]['days'].item()
+        group_day = df.groupby(pd.Grouper(key='datetime', freq='D'))
+        group_n_days = list(group_day)[:n_days_limit]
 
-            count_zero = np.where(daily_serie[1]==0)[0].size
-            daily_serie_size = daily_serie[1].size
+        for daily_serie in group_n_days:
+            mean = daily_serie[1]['activity'].mean()
+            sd = numpy.std(daily_serie[1]['activity'])
+
+            count_zero = (daily_serie[1]['activity']==0).sum()
+            daily_serie_size = daily_serie[1]['activity'].size
             proportion_zero = count_zero/daily_serie_size
 
             row_day = {'userid': key, 'class': user_class.value, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero}
