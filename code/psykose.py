@@ -67,17 +67,52 @@ def create_structure():
 
     return contentControl, contentPatient
 
+"""
+
+"""
+def format_dataset(dataset):
+    dic_result = dict()
+
+    days_collected = DaysCollected()
+    days = days_collected.get_days_collected()
+
+    for key in set(dataset.keys()).difference({'target'}):
+        value = dataset[key]
+
+        df = value['timeserie']
+        user_class = value['target']
+
+        df["datetime"] = pd.to_datetime(df["timestamp"])
+        #group_day = df.groupby(df["datetime"].dt.day)['activity']
+
+        n_days_limit = days.loc[days['id'] == key]['days'].item()
+        group_day = df.groupby(pd.Grouper(key='datetime', freq='D'))
+        group_n_days = list(group_day)[:n_days_limit]
+
+        # get the second element from tuple in a list using comprehension list
+        df_days = [tuple[1] for tuple in group_n_days]
+
+        #df_result.extend(group_n_days)
+
+        dic_result[key] = {}
+        dic_result[key]['timeserie'] = df_days
+
+    return dic_result
+
+
+
+
     #structure
     # userid - class - mean - sd - prop_zeros   -> day 1
     # userid - class - mean - sd - prop_zeros   -> day 2
-def generate_baseline(control):
+def generate_baseline(dataset):
     df_stats = pd.DataFrame()
 
     col = DaysCollected()
     days = col.get_days_collected()
 
-    for key in set(control.keys()).difference({'target'}):
-        value = control[key]
+    for key in set(dataset.keys()).difference({'target'}):
+        value = dataset[key]
 
         df = value['timeserie']
         user_class = value['target']
@@ -205,16 +240,46 @@ def graph_activity_by_frequency(time_serie):
     aw = ""
 
 
+def new_features(dataset):
+   # list_people = [dataset[key]['timeserie'] for key in dataset]
+    df_day_night = {}
+
+    for key in set(dataset.keys()):
+        value = dataset[key]
+
+        list_tm = value['timeserie']
+        df_day_night[key] = {}
+
+        list_day = list()
+        list_night = list()
+        for dftm in list_tm:
+            dftm.index = dftm['datetime']
+
+            day = dftm.between_time('6:00', '17:59')
+            list_day.append(day)
+
+            night = dftm.between_time('18:00', '23:59')
+            list_night.append(night)
+
+        df_day_night[key]['day'] = list_day
+        df_day_night[key]['night'] = list_night
+
+    return df_day_night
+
+def stats_day_night(df_day_night):
+    pass
+
 
 
 if __name__ == '__main__':
-    pd.set_option('display.max_columns', None)
     control, patient = create_structure()
 
     #print(control)
 
     #graph of entire timeserie of a given person
     #graph_timeserie(patient)
+    formated = format_dataset(control)
+    df_day_night = new_features(formated)
 
     baselineControl = generate_baseline(control)
     baselinePatient = generate_baseline(patient)

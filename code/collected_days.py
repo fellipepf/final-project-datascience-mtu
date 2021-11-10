@@ -11,8 +11,6 @@ class DaysCollected:
     def __init__(self):
         collected_days = self.create_structure()
         self.collected_days = self.prepare_dataset(collected_days)
-    #     stats_collected_days(collected_days)
-    #     #print(collected_days.head())
 
     def loadFileCSV(self, dir):
         data = pd.read_csv(dir, delimiter=',')
@@ -24,9 +22,6 @@ class DaysCollected:
         dir_collected_days = "../psykose/days.csv"
 
         content_collected_days = self.loadFileCSV(dir_collected_days)
-
-
-        print(dir_collected_days)
         #structureControl = pd.DataFrame(zip(contentControl), columns=["data"])
 
         return content_collected_days
@@ -37,8 +32,8 @@ class DaysCollected:
     def prepare_dataset(self, collected_days):
         for index, row in collected_days.iterrows():
             id = row['id']
-
             x = id.split("_")
+
             if x[0].lstrip() == "patient":
                 user_type = utils.Target.PATIENT
             else:
@@ -71,6 +66,6 @@ class DaysCollected:
 #     stats_collected_days(collected_days)
 #     #print(collected_days.head())
 
-col = DaysCollected()
-days = col.get_days_collected()
-print(days)
+#col = DaysCollected()
+#days = col.get_days_collected()
+#print(days)
