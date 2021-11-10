@@ -17,17 +17,19 @@ from sklearn.metrics import log_loss
 from sklearn.metrics import precision_recall_curve, average_precision_score
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 from sklearn.metrics import confusion_matrix, classification_report
+from IPython.testing.globalipapp import get_ipython
 
 get_ipython().run_line_magic('matplotlib', 'inline')
 
-current_path = os.getcwd()
-file = '/CHANGE ME TO CORRECT PATH/features.csv'
+#current_path = os.getcwd()
+file = '../psykose/schizophrenia-features.csv'
 
-data = pd.read_csv(current_path + file)
+data = pd.read_csv(file)
 
-dataX = data.copy().drop(['Class'],axis=1)
-dataY = data['Class'].copy()
+dataX = data.copy().drop(['class'],axis=1)
+dataY = data['class'].copy()
 
+#column Time does not exist on baseline dataset. The autor should have created another dataset
 featuresToScale = dataX.drop(['Time'],axis=1).columns
 sX = pp.StandardScaler(copy=True)
 dataX.loc[:,featuresToScale] = sX.fit_transform(dataX[featuresToScale])
