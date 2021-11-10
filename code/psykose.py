@@ -258,6 +258,7 @@ def new_features(dataset):
             day = dftm.between_time('6:00', '17:59')
             list_day.append(day)
 
+            #this is one day range so after 23:59 is not in this period of time
             night = dftm.between_time('18:00', '23:59')
             list_night.append(night)
 
@@ -266,10 +267,45 @@ def new_features(dataset):
 
     return df_day_night
 
+'''
+
+This function calculates the mean, SD and proportion of zeros
+input:
+output:
+'''
+def calculate_statistics(daily_serie):
+    mean = daily_serie['activity'].mean()
+    sd = numpy.std(daily_serie['activity'])
+
+    count_zero = (daily_serie['activity'] == 0).sum()
+    daily_serie_size = daily_serie['activity'].size
+    proportion_zero = count_zero / daily_serie_size
+
+    return mean, sd, proportion_zero
+
 def stats_day_night(df_day_night):
-    pass
+    for key in set(df_day_night.keys()):
+        value = df_day_night[key]
 
+        list_day = value['day']
+        df_stats = pd.DataFrame()
+        for daily_serie in list_day:
+            mean, sd, proportion_zero = calculate_statistics(daily_serie)
 
+            row_stats = {'mean': mean, 'sd': sd, 'prop_zero': proportion_zero}
+            df_stats = df_stats.append(row_stats, ignore_index=True )
+        df_day_night[key]['day_stats'] = df_stats
+
+        list_night = value['night']
+        df_stats = pd.DataFrame()
+        for daily_serie in list_night:
+            mean, sd, proportion_zero = calculate_statistics(daily_serie)
+
+            row_stats = {'mean': mean, 'sd': sd, 'prop_zero': proportion_zero}
+            df_stats = df_stats.append(row_stats, ignore_index=True )
+        df_day_night[key]['night_stats'] = df_stats
+
+    return df_day_night
 
 if __name__ == '__main__':
     control, patient = create_structure()
@@ -280,6 +316,7 @@ if __name__ == '__main__':
     #graph_timeserie(patient)
     formated = format_dataset(control)
     df_day_night = new_features(formated)
+    df_day_night = stats_day_night(df_day_night)
 
     baselineControl = generate_baseline(control)
     baselinePatient = generate_baseline(patient)
