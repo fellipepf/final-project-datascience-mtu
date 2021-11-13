@@ -20,52 +20,43 @@ class Target(Enum):
     PATIENT = 1
     CONTROL = 0
 
-def loadFileCSV(dir, Target):
-    content = {}
-    files = glob.glob(dir)
-    for file in files:
-        data = pd.read_csv(file, delimiter=',' )
-        key = getName(file)
-        content[key] = {}
-        content[key]['timeserie'] = data
-        content[key]['target'] = Target
+class LoadDataset:
 
+    def __init__(self):
+        self.control, self.patient = self.create_structure()
 
-    return content
+    def loadFileCSV(self, dir, Target):
+        content = {}
+        files = glob.glob(dir)
+        for file in files:
+            data = pd.read_csv(file, delimiter=',' )
+            key = self.getName(file)
+            content[key] = {}
+            content[key]['timeserie'] = data
+            content[key]['target'] = Target
 
+        return content
 
+    def getName(self, name):
+        x = name.split("/")
+        x = x[3].split(".")
 
-def loadFiles(dir):
+        return x[0]
 
-    content = list()
-    files = glob.glob(dir)
-    for name in files:
-        with open(name, encoding="utf8", errors='ignore' ) as f:
-            values = f.read()
-            values = values.splitlines()
-            content.append(values)
-    return content
+    def create_structure(self):
+        dir_control = "../psykose/control/*.csv"
+        dir_patient = "../psykose/patient/*.csv"
 
-
-def getName(name):
-    x = name.split("/")
-    x = x[3].split(".")
-
-    return x[0]
-
-
-def create_structure():
-    dir_control = "../psykose/control/*.csv"
-    dir_patient = "../psykose/patient/*.csv"
-
-    contentControl = loadFileCSV(dir_control, Target.CONTROL)
-    contentPatient = loadFileCSV(dir_patient, Target.PATIENT)
-
+        contentControl = self.loadFileCSV(dir_control, Target.CONTROL)
+        contentPatient = self.loadFileCSV(dir_patient, Target.PATIENT)
 
     #print(contentControl)
     #structureControl = pd.DataFrame(zip(contentControl), columns=["data"])
 
-    return contentControl, contentPatient
+        return contentControl, contentPatient
+
+    def get_dataset(self):
+        return self.control, self.patient
 
 """
 
@@ -307,8 +298,12 @@ def stats_day_night(df_day_night):
 
     return df_day_night
 
+def eda_day_night(day_night):
+    pass
+
 if __name__ == '__main__':
-    control, patient = create_structure()
+
+    control, patient = LoadDataset().get_dataset()
 
     #print(control)
 
