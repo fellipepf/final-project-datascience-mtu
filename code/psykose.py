@@ -303,27 +303,38 @@ def eda_day_night(day_night):
 
 if __name__ == '__main__':
 
+    ##configuration
+    export_baseline_to_html = False
+
+    # EDA
+    show_timeseries_graph = False
+
     control, patient = LoadDataset().get_dataset()
 
     #print(control)
 
+    # EDA
     #graph of entire timeserie of a given person
-    #graph_timeserie(patient)
+    if show_timeseries_graph:
+        graph_timeserie(patient)
+
+
     formated = format_dataset(control)
     df_day_night = new_features(formated)
     df_day_night = stats_day_night(df_day_night)
+
 
     baselineControl = generate_baseline(control)
     baselinePatient = generate_baseline(patient)
 
 
-
-    export_df_to_html(baselineControl, "statsControl")
-    export_df_to_html(baselinePatient, "statsPatient")
+    if export_baseline_to_html:
+        export_df_to_html(baselineControl, "statsControl")
+        export_df_to_html(baselinePatient, "statsPatient")
 
     #baseline generated from the time series
     join_baselines = pd.concat([baselineControl, baselinePatient])
-    my_baseline.stats_baseline_boxplot(join_baselines)
+    my_baseline.eda_baseline_boxplot(join_baselines)
 
 
     graph_activity_by_period(control)
