@@ -1,20 +1,19 @@
 
 
-
 # ------------------------------------------
 # IMPORTS
 # ------------------------------------------
-import numpy
-import numpy as np
-import pandas as pd
 import glob
-import re
-
 from enum import Enum
+import os
 import matplotlib.pyplot as plt
 
-import my_baseline
+import numpy
+import pandas as pd
+from scipy.stats import kurtosis, skew
+import baseline_eda
 from collected_days import DaysCollected
+
 
 class Target(Enum):
     PATIENT = 1
@@ -38,14 +37,14 @@ class LoadDataset:
         return content
 
     def getName(self, name):
-        x = name.split("/")
-        x = x[3].split(".")
+        return os.path.basename(name).split('.')[0]
 
-        return x[0]
 
     def create_structure(self):
-        dir_control = "../psykose/control/*.csv"
-        dir_patient = "../psykose/patient/*.csv"
+        #dir_control = "../psykose/control/*.csv"
+        dir_control = "/Users/fellipeferreira/OneDrive/CIT - Master Data Science/Semester 3/project/final-project-datascience-mtu/psykose/control/*.csv"
+        #dir_patient = "../psykose/patient/*.csv"
+        dir_patient = "/Users/fellipeferreira/OneDrive/CIT - Master Data Science/Semester 3/project/final-project-datascience-mtu/psykose/patient/*.csv"
 
         contentControl = self.loadFileCSV(dir_control, Target.CONTROL)
         contentPatient = self.loadFileCSV(dir_patient, Target.PATIENT)
@@ -58,10 +57,17 @@ class LoadDataset:
     def get_dataset(self):
         return self.control, self.patient
 
-"""
 
-"""
-def format_dataset(dataset):
+class PreProcessing:
+    def __init__(self):
+        pass
+
+
+
+'''
+This function reduce the dataset to the number of days for each person
+'''
+def process_dataset_byday(dataset):
     dic_result = dict()
 
     days_collected = DaysCollected()
@@ -85,17 +91,21 @@ def format_dataset(dataset):
 
         #df_result.extend(group_n_days)
 
+        #transform list of dataframes to only one dataframe
+        #df_all = pd.concat(df_days)
+        #df_all['class'] = user_class
+
         dic_result[key] = {}
         dic_result[key]['timeserie'] = df_days
+        dic_result[key]['user_class'] = user_class
 
     return dic_result
 
-
-
-
-    #structure
-    # userid - class - mean - sd - prop_zeros   -> day 1
-    # userid - class - mean - sd - prop_zeros   -> day 2
+'''
+    structure
+     userid - class - mean - sd - prop_zeros   -> day 1
+     userid - class - mean - sd - prop_zeros   -> day 2
+'''
 def generate_baseline(dataset):
     df_stats = pd.DataFrame()
 
@@ -116,6 +126,8 @@ def generate_baseline(dataset):
         group_n_days = list(group_day)[:n_days_limit]
 
         for daily_serie in group_n_days:
+            date = daily_serie[0]
+
             mean = daily_serie[1]['activity'].mean()
             sd = numpy.std(daily_serie[1]['activity'])
 
@@ -123,8 +135,12 @@ def generate_baseline(dataset):
             daily_serie_size = daily_serie[1]['activity'].size
             proportion_zero = count_zero/daily_serie_size
 
-            row_day = {'userid': key, 'class': user_class.value, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero}
+            kurtosis_value = kurtosis(daily_serie[1]['activity'], fisher=False)
+            skewness = skew(daily_serie[1]['activity'])
+
+            row_day = {'userid': key, 'class': user_class.value, 'date':date, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero, 'kurtosis': kurtosis_value, 'skew': skewness}
             df_stats = df_stats.append(row_day, ignore_index=True )
+
 
             print(f'{key} mean {mean} sd {sd} zeros {count_zero}, total {daily_serie_size} -> {proportion_zero}')
 
@@ -151,31 +167,20 @@ def generate_baseline(dataset):
     return df_stats
 
 
-def export_df_to_html(df, name = None):
-    html = df.to_html()
 
-    if name is None:
-        name = "df.html"
-    else:
-        name = name + ".html"
-
-    # write html to file
-    text_file = open(name, "w")
-    text_file.write(html)
-    text_file.close()
 
 #
 def graph_timeserie(patient):
     # graph
 
-    userid = "patient_1"
+    userid = 'patient_1'
     df_patient = patient[userid]['timeserie']
 
     df_patient.plot(x="timestamp",y="activity")
     plt.show()
 
 
-def graph_patient_avg_by_hour():
+def graph_patient_avg_by_hour(patient):
     userid = "patient_1"
     df_patient = patient[userid]['timeserie']
 
@@ -190,7 +195,7 @@ def graph_patient_avg_by_hour():
     plt.ylabel("activity");
     plt.show()
 
-def graph_control_avg_by_hour():
+def graph_control_avg_by_hour(control):
 
     userid = "control_1"
     df_control = control[userid]['timeserie']
@@ -239,6 +244,7 @@ def new_features(dataset):
         value = dataset[key]
 
         list_tm = value['timeserie']
+        user_class = value['user_class']
         df_day_night[key] = {}
 
         list_day = list()
@@ -255,6 +261,7 @@ def new_features(dataset):
 
         df_day_night[key]['day'] = list_day
         df_day_night[key]['night'] = list_night
+        df_day_night[key]['user_class'] = user_class
 
     return df_day_night
 
@@ -272,27 +279,31 @@ def calculate_statistics(daily_serie):
     daily_serie_size = daily_serie['activity'].size
     proportion_zero = count_zero / daily_serie_size
 
-    return mean, sd, proportion_zero
+    kurtosis_value = kurtosis(daily_serie['activity'], fisher=False)
+    skewness = skew(daily_serie['activity'])
+
+    return mean, sd, proportion_zero, kurtosis_value, skewness
 
 def stats_day_night(df_day_night):
     for key in set(df_day_night.keys()):
         value = df_day_night[key]
+        user_class = value['user_class']
 
         list_day = value['day']
         df_stats = pd.DataFrame()
         for daily_serie in list_day:
-            mean, sd, proportion_zero = calculate_statistics(daily_serie)
-
-            row_stats = {'mean': mean, 'sd': sd, 'prop_zero': proportion_zero}
+            mean, sd, proportion_zero, kurtosis, skewness = calculate_statistics(daily_serie)
+#, 'class': user_class.value, 'date':date,
+            row_stats = {'userid': key, 'class': user_class.value, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero, 'kurtosis': kurtosis, 'skew': skewness}
             df_stats = df_stats.append(row_stats, ignore_index=True )
         df_day_night[key]['day_stats'] = df_stats
 
         list_night = value['night']
         df_stats = pd.DataFrame()
         for daily_serie in list_night:
-            mean, sd, proportion_zero = calculate_statistics(daily_serie)
+            mean, sd, proportion_zero, kurtosis, skewness = calculate_statistics(daily_serie)
 
-            row_stats = {'mean': mean, 'sd': sd, 'prop_zero': proportion_zero}
+            row_stats = {'userid': key, 'class': user_class.value, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero, 'kurtosis': kurtosis, 'skew': skewness}
             df_stats = df_stats.append(row_stats, ignore_index=True )
         df_day_night[key]['night_stats'] = df_stats
 
@@ -304,7 +315,7 @@ def eda_day_night(day_night):
 if __name__ == '__main__':
 
     ##configuration
-    export_baseline_to_html = False
+    export_baseline_to_html = True
 
     # EDA
     show_timeseries_graph = False
@@ -317,11 +328,19 @@ if __name__ == '__main__':
     #graph of entire timeserie of a given person
     if show_timeseries_graph:
         graph_timeserie(patient)
+        graph_patient_avg_by_hour(patient)
+        graph_control_avg_by_hour(control)
 
 
-    formated = format_dataset(control)
-    df_day_night = new_features(formated)
+
+    processed_dataset = process_dataset_byday(control)
+    df_day_night = new_features(processed_dataset)
     df_day_night = stats_day_night(df_day_night)
+
+    # graphs for day night
+
+
+    ####
 
 
     baselineControl = generate_baseline(control)
@@ -329,12 +348,14 @@ if __name__ == '__main__':
 
 
     if export_baseline_to_html:
-        export_df_to_html(baselineControl, "statsControl")
-        export_df_to_html(baselinePatient, "statsPatient")
+        beda = baseline_eda.BaselineEDA()
+        beda.export_df_to_html(baselineControl, "statsControl")
+        beda.export_df_to_html(baselinePatient, "statsPatient")
+        #beda.export_df_to_html(df_day_night, "stats")
 
     #baseline generated from the time series
     join_baselines = pd.concat([baselineControl, baselinePatient])
-    my_baseline.eda_baseline_boxplot(join_baselines)
+    baseline_eda.eda_baseline_boxplot(join_baselines)
 
 
     graph_activity_by_period(control)
