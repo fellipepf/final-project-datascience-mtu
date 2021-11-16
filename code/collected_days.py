@@ -19,7 +19,7 @@ class DaysCollected:
 
 
     def create_structure(self):
-        dir_collected_days = "../psykose/days.csv"
+        dir_collected_days = "/Users/fellipeferreira/OneDrive/CIT - Master Data Science/Semester 3/project/final-project-datascience-mtu/psykose/days.csv"
 
         content_collected_days = self.loadFileCSV(dir_collected_days)
         #structureControl = pd.DataFrame(zip(contentControl), columns=["data"])
@@ -42,17 +42,12 @@ class DaysCollected:
 
         return collected_days
 
-    def stats_collected_days(collected_days):
+    def stats_collected_days(self, collected_days):
 
         desc = collected_days.groupby('class').describe()
         print(desc)
 
         #control = baseline.loc[baseline['class'] == 0]
-
-        #sns.set_style("darkgrid")
-        #sns.boxplot(x=baseline["class"], y=baseline["f.mean"])
-        #plt.show()
-
         #plt.show()
         #print(collected_days)
         #print(control)
@@ -66,6 +61,6 @@ class DaysCollected:
 #     stats_collected_days(collected_days)
 #     #print(collected_days.head())
 
-#col = DaysCollected()
-#days = col.get_days_collected()
-#print(days)
+# col = DaysCollected()
+# days = col.get_days_collected()
+# print(days.head())
