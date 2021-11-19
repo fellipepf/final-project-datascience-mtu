@@ -3,6 +3,7 @@
 # ------------------------------------------
 import sys
 
+import numpy as np
 import pandas as pd
 import glob
 import matplotlib.pyplot as plt
@@ -26,7 +27,7 @@ class BaselineEDA:
         text_file.write(html)
         text_file.close()
 
-def eda_baseline_boxplot(baseline):
+def eda_baseline_boxplot_mean(baseline):
     control = baseline.loc[baseline['class'] == 0]
 
     sns.set_style("darkgrid")
@@ -37,9 +38,41 @@ def eda_baseline_boxplot(baseline):
     print(control.describe())
     print(control)
 
+def eda_baseline_boxplot(baseline, y_feature):
+    sns.set_style("darkgrid")
+    sns.boxplot(x=baseline["class"], y=baseline[y_feature])
+    plt.show()
+
+def eda_baseline_boxplot_remove_outliers(baseline, y_feature, remove_outlier=False):
+    baseline_witout_outlier = pd.DataFrame()
+
+    if remove_outlier:
+        baseline_witout_outlier = remove_outliers(baseline, y_feature)
+
+    eda_baseline_boxplot(baseline_witout_outlier, y_feature)
+
+def remove_outliers(baseline, y_feature):
+
+    q25 = baseline[y_feature].quantile(0.25)
+    q75 = baseline[y_feature].quantile(0.75)
+    intr_qr = q75 - q25
+
+    print('Percentiles: 25th=%.3f, 75th=%.3f, IQR=%.3f' % (q25, q75, intr_qr))
+
+    max = q75 + (1.5 * intr_qr)
+    min = q25 - (1.5 * intr_qr)
+
+    print('Lower: %.3f, Upper: %.3f,' % (min, max))
+    baseline[baseline[y_feature] > max] = np.nan
+    baseline[baseline[y_feature] < min] = np.nan
+
+    # remove rows with NAN based on column feature
+    baseline = baseline.dropna(subset=[y_feature])
+
+    return baseline
 
 
 if __name__ == '__main__':
 
     baseline = sys.stdin
-    eda_baseline_boxplot(baseline)
+    eda_baseline_boxplot_mean(baseline)

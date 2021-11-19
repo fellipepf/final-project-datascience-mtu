@@ -8,12 +8,12 @@ from enum import Enum
 import os
 import matplotlib.pyplot as plt
 
-import numpy
+import numpy as np
 import pandas as pd
 from scipy.stats import kurtosis, skew
 import baseline_eda
 from collected_days import DaysCollected
-
+import utils
 
 class Target(Enum):
     PATIENT = 1
@@ -129,7 +129,7 @@ def generate_baseline(dataset):
             date = daily_serie[0]
 
             mean = daily_serie[1]['activity'].mean()
-            sd = numpy.std(daily_serie[1]['activity'])
+            sd = np.std(daily_serie[1]['activity'])
 
             count_zero = (daily_serie[1]['activity']==0).sum()
             daily_serie_size = daily_serie[1]['activity'].size
@@ -273,7 +273,7 @@ output:
 '''
 def calculate_statistics(daily_serie):
     mean = daily_serie['activity'].mean()
-    sd = numpy.std(daily_serie['activity'])
+    sd = np.std(daily_serie['activity'])
 
     count_zero = (daily_serie['activity'] == 0).sum()
     daily_serie_size = daily_serie['activity'].size
@@ -315,10 +315,11 @@ def eda_day_night(day_night):
 if __name__ == '__main__':
 
     ##configuration
-    export_baseline_to_html = True
+    export_baseline_to_html = False
 
     # EDA
     show_timeseries_graph = False
+    show_baseline_boxplot = True
 
     control, patient = LoadDataset().get_dataset()
 
@@ -332,7 +333,7 @@ if __name__ == '__main__':
         graph_control_avg_by_hour(control)
 
 
-
+    # dataset with day and night
     processed_dataset = process_dataset_byday(control)
     df_day_night = new_features(processed_dataset)
     df_day_night = stats_day_night(df_day_night)
@@ -342,7 +343,7 @@ if __name__ == '__main__':
 
     ####
 
-
+    # dataset
     baselineControl = generate_baseline(control)
     baselinePatient = generate_baseline(patient)
 
@@ -354,9 +355,12 @@ if __name__ == '__main__':
         #beda.export_df_to_html(df_day_night, "stats")
 
     #baseline generated from the time series
-    join_baselines = pd.concat([baselineControl, baselinePatient])
-    baseline_eda.eda_baseline_boxplot(join_baselines)
 
+    if show_baseline_boxplot:
+        join_baselines = pd.concat([baselineControl, baselinePatient])
+        #baseline_eda.eda_baseline_boxplot_mean(join_baselines)
+        #baseline_eda.eda_baseline_boxplot(join_baselines, utils.Feature.SKEW)
+        baseline_eda.eda_baseline_boxplot_remove_outliers(join_baselines, utils.Feature.SKEW, True)
 
     graph_activity_by_period(control)
 
