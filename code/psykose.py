@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.stats import kurtosis, skew
+from collections import OrderedDict
+
 import baseline_eda
 from collected_days import DaysCollected
 import utils
@@ -312,19 +314,68 @@ def stats_day_night(df_day_night):
 def eda_day_night(day_night):
     pass
 
+
+
+def eda_baseline(baseline):
+    #check for null values
+    print(baseline.isnull().sum())
+
+
+def eda_baseline_date_range(baseline):
+    df_stats = pd.DataFrame()
+    for index, (key, value) in enumerate(baseline.items()):
+
+        df_timeserie = value["timeserie"]
+        user_class = value ["target"]
+
+        df_timeserie['datetime'] = pd.to_datetime(df_timeserie['timestamp'])
+
+        initial_date = df_timeserie.iloc[0]["datetime"]
+        final_date = df_timeserie.iloc[-1]["datetime"]
+        diff = final_date.date() - initial_date.date()
+        total_days = diff.days +1
+
+        #diferenca em segundo entre timestamp
+        size = df_timeserie.shape[0]
+
+        group_day = df_timeserie.groupby(pd.Grouper(key='datetime', freq='D'))
+        list_days = list(group_day)
+        days_first_day =  list_days[0][1].shape[0]
+        days_second_day = list_days[1][1].shape[0]
+        days_last_day = list_days[-1][1].shape[0]
+        row_stats = OrderedDict()
+        row_stats = {'userid': key, 'class': user_class.name, "initial date": initial_date,
+                     "final date": final_date, "total days": total_days, "total values": size,
+                     "number days first day": days_first_day,
+                     "number days second day": days_second_day, #represents middle of day
+                     "number days last day": days_last_day}
+        df_stats = df_stats.append(row_stats, ignore_index=True )
+
+    return df_stats
+
+def generate_baseline_csv(baselines):
+
+    baselines["class_str"] = "c_0_1"
+    baselines = baselines.drop(["date"], axis=1)
+
+    baselines.to_csv('my_baseline.csv', index=False, header=True, line_terminator='\n', encoding='utf-8',sep=',')
+
+
 if __name__ == '__main__':
 
     ##configuration
     export_baseline_to_html = False
+    export_baseline_to_csv = True
+
 
     # EDA
     show_timeseries_graph = False
-    show_baseline_boxplot = True
+    show_baseline_boxplot = False
 
     control, patient = LoadDataset().get_dataset()
 
     #print(control)
-
+    range_info = eda_baseline_date_range(control)
     # EDA
     #graph of entire timeserie of a given person
     if show_timeseries_graph:
@@ -347,6 +398,8 @@ if __name__ == '__main__':
     baselineControl = generate_baseline(control)
     baselinePatient = generate_baseline(patient)
 
+    eda_baseline(baselinePatient)
+    #eda_baseline_date_range(baselineControl)
 
     if export_baseline_to_html:
         beda = baseline_eda.BaselineEDA()
@@ -355,12 +408,15 @@ if __name__ == '__main__':
         #beda.export_df_to_html(df_day_night, "stats")
 
     #baseline generated from the time series
+    join_baselines = pd.concat([baselineControl, baselinePatient])
 
     if show_baseline_boxplot:
-        join_baselines = pd.concat([baselineControl, baselinePatient])
         #baseline_eda.eda_baseline_boxplot_mean(join_baselines)
         #baseline_eda.eda_baseline_boxplot(join_baselines, utils.Feature.SKEW)
         baseline_eda.eda_baseline_boxplot_remove_outliers(join_baselines, utils.Feature.SKEW, True)
+
+    if export_baseline_to_csv:
+        generate_baseline_csv(join_baselines)
 
     graph_activity_by_period(control)
 
