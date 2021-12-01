@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-class BaselineEDA:
+class ExportBaseline:
     def __init__(self):
         pass
 
@@ -26,6 +26,21 @@ class BaselineEDA:
         text_file = open(name, "w")
         text_file.write(html)
         text_file.close()
+
+    # export baseline to csv
+    def generate_baseline_csv(self, baselines, file_name=None):
+
+        baselines["class_str"] = "c_0_1"
+        try:
+            baselines = baselines.drop(["date"], axis=1)
+        except:
+            print("Column not found")
+
+        if file_name == None:
+            file_name = 'my_baseline.csv'
+
+        baselines.to_csv(file_name, index=False, header=True, line_terminator='\n', encoding='utf-8', sep=',')
+
 
 def eda_baseline_boxplot_mean(baseline):
     control = baseline.loc[baseline['class'] == 0]
@@ -70,6 +85,10 @@ def remove_outliers(baseline, y_feature):
     baseline = baseline.dropna(subset=[y_feature])
 
     return baseline
+
+def check_nullvalues(baseline):
+    #check for null values
+    print(baseline.isnull().sum())
 
 
 if __name__ == '__main__':
