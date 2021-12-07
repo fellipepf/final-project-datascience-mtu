@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import pandas as pd
+from scipy.signal import find_peaks
 from scipy.stats import kurtosis, skew
 from collections import OrderedDict
 
@@ -60,11 +61,106 @@ class LoadDataset:
         return self.control, self.patient
 
     def get_dataset_joined(self):
-        return control | patient
+        #return self.control | self.patient  #python 3.9
+        return dict(self.control, **self.patient)
 
 
+
+#include methods to limit values by number of days
+# transform in only one dataset
 class PreProcessing:
-    def __init__(self):
+
+    def __init__(self, *args):
+        if len(args) == 1:
+            self.control_patient = args[0]
+
+        if len(args) == 2:
+            self.control_patient = args[0] | args[1]
+
+        #Dictinary structure
+        #filter dataset by number of days
+        self.control_patient_byday = self.__process_dataset_byday(self.control_patient)
+
+        #split by time perio
+
+        #Dataframe structure
+        #transform dataset from dict to just one dataframe
+        self.df_dataset =  self.create_one_df_struture(self.control_patient_byday)
+
+    '''
+    This function reduce the dataset to the number of days for each person
+    '''
+    def __process_dataset_byday(self, dataset):
+        dic_result = dict()
+        remove_fist_day = True
+
+        days_collected = DaysCollected()
+        days = days_collected.get_days_collected()
+
+        for key in set(dataset.keys()).difference({'target'}):
+            value = dataset[key]
+
+            df = value['timeserie']
+            user_class = value['target']
+
+            df["datetime"] = pd.to_datetime(df["timestamp"])
+            # group_day = df.groupby(df["datetime"].dt.day)['activity']
+
+            n_days_limit = days.loc[days['id'] == key]['days'].item()
+            group_day = df.groupby(pd.Grouper(key='datetime', freq='D'))
+
+            if remove_fist_day:
+                list_days = list(group_day)
+
+                # remove first day and
+                # slice n number of elements defined
+                group_n_days = list_days[1:n_days_limit + 1]
+            else:
+                group_n_days = list(group_day)[:n_days_limit]
+
+            # get the second element from tuple in a list using comprehension list
+            df_days = [tuple[1] for tuple in group_n_days]
+
+            # df_result.extend(group_n_days)
+
+            # transform list of dataframes to only one dataframe
+            # df_all = pd.concat(df_days)
+            # df_all['class'] = user_class
+
+            dic_result[key] = {}
+            dic_result[key]['timeserie'] = df_days
+            dic_result[key]['user_class'] = user_class
+
+        return dic_result
+
+
+    def create_one_df_struture(self, control_patient_byday):
+        df_data_set = pd.DataFrame()
+
+        for key, value in control_patient_byday.items():
+            df_ts = value['timeserie']
+            df_ts = pd.concat(df_ts)
+
+            df_ts['user'] = key
+            df_ts['class'] = value['user_class']
+
+            df_data_set = df_data_set.append(df_ts)
+
+        return df_data_set
+
+
+
+
+class CreateBaseline:
+    def __init__(self, *args):
+
+        if len(args) == 1:
+            pass
+
+        if len(args) == 2:
+            pass
+
+    def baseline_paper(self):
         pass
 
 
@@ -157,7 +253,7 @@ def generate_baseline(dataset):
             df_stats = df_stats.append(row_day, ignore_index=True )
 
 
-            print(f'{key} mean {mean} sd {sd} zeros {count_zero}, total {daily_serie_size} -> {proportion_zero}')
+            #print(f'{key} mean {mean} sd {sd} zeros {count_zero}, total {daily_serie_size} -> {proportion_zero}')
 
 
 
@@ -254,6 +350,7 @@ def graph_activity_by_frequency(time_serie):
 New features
 '''
 
+
 def split_time_period(dataset):
    # list_people = [dataset[key]['timeserie'] for key in dataset]
     df_day_night = {}
@@ -301,22 +398,41 @@ def build_baseline_from_timeperiod(df_day_night):
         evening_df_list = value['evening']
 
         user_class = value['user_class']
+
         for morning, afternoon, evening in zip(morning_df_list, afternoon_df_list, evening_df_list):
-            morning_mean, morning_sd, morning_prop_zero, morning_kurtosis, morning_skewness = calculate_statistics(morning)
-            afternoon_mean, afternoon_sd, afternoon_prop_zero, afternoon_kurtosis, afternoon_skewness = calculate_statistics(afternoon)
-            evening_mean, evening_sd, evening_prop_zero, evening_kurtosis, evening_skewness = calculate_statistics(evening)
+            morning_mean, morning_sd, morning_prop_zero, morning_kurtosis, morning_skewness, morning_peaks = calculate_statistics(morning)
+            afternoon_mean, afternoon_sd, afternoon_prop_zero, afternoon_kurtosis, afternoon_skewness, afternoon_peaks = calculate_statistics(afternoon)
+            evening_mean, evening_sd, evening_prop_zero, evening_kurtosis, evening_skewness, evening_peaks = calculate_statistics(evening)
 
             row_stats = {'userid': key, 'class': user_class.value,
-                         'morning_mean': morning_mean, 'morning_sd': morning_sd, 'morning_prop_zero': morning_prop_zero, 'morning_kurtosis': morning_kurtosis, 'morning_skewness': morning_skewness,
-                         'afternoon_mean': afternoon_mean, 'afternoon_sd': afternoon_sd, 'afternoon_prop_zero': afternoon_prop_zero, 'afternoon_kurtosis': afternoon_kurtosis, 'afternoon_skewness': afternoon_skewness,
-                         'evening_mean': evening_mean, 'evening_sd': evening_sd, 'evening_prop_zero': evening_prop_zero, 'evening_kurtosis': evening_kurtosis, 'evening_skewness': evening_skewness
+                         'morning_mean': morning_mean,
+                         'morning_sd': morning_sd,
+                         'morning_prop_zero': morning_prop_zero,
+                         'morning_kurtosis': morning_kurtosis,
+                         'morning_skewness': morning_skewness,
+                         'morning_peaks': morning_peaks,
+
+                         'afternoon_mean': afternoon_mean,
+                         'afternoon_sd': afternoon_sd,
+                         'afternoon_prop_zero': afternoon_prop_zero,
+                         'afternoon_kurtosis': afternoon_kurtosis,
+                         'afternoon_skewness': afternoon_skewness,
+                         'afternoon_peaks': afternoon_peaks,
+
+                         'evening_mean': evening_mean,
+                         'evening_sd': evening_sd,
+                         'evening_prop_zero': evening_prop_zero,
+                         'evening_kurtosis': evening_kurtosis,
+                         'evening_skewness': evening_skewness,
+                         'evening_peaks': evening_peaks
 
                          }
             df_stats = df_stats.append(row_stats, ignore_index=True)
 
-    df_stats = df_stats[['userid', 'class', 'morning_mean', 'morning_sd', 'morning_prop_zero', 'morning_kurtosis', 'morning_skewness',
-                         'afternoon_mean', 'afternoon_sd', 'afternoon_prop_zero', 'afternoon_kurtosis', 'afternoon_skewness',
-                         'evening_mean', 'evening_sd', 'evening_prop_zero', 'evening_kurtosis', 'evening_skewness'
+    df_stats = df_stats[['userid', 'class',
+                         'morning_mean', 'morning_sd', 'morning_prop_zero', 'morning_kurtosis', 'morning_skewness', 'morning_peaks',
+                         'afternoon_mean', 'afternoon_sd', 'afternoon_prop_zero', 'afternoon_kurtosis', 'afternoon_skewness', 'afternoon_peaks',
+                         'evening_mean', 'evening_sd', 'evening_prop_zero', 'evening_kurtosis', 'evening_skewness','evening_peaks'
                          ]]
 
     return df_stats
@@ -325,6 +441,21 @@ def build_baseline_from_timeperiod(df_day_night):
         # group_day = df.groupby(df["datetime"].dt.day)['activity']
 
 
+
+def graph_peaks(serie_period_time):
+    serie = serie_period_time["activity"].values
+    avg = serie.mean()
+
+    peaks, _ = find_peaks(serie, height=avg)
+    print(f"AVG: {avg} Peaks: {len(peaks)}")
+    plt.plot(serie)
+    plt.plot(peaks, serie[peaks], "x")
+    plt.plot(np.zeros_like(serie), "--", color="gray")
+    plt.show()
+
+def count_peaks_above_mean(serie, avg):
+    peaks, _ = find_peaks(serie, height=avg)
+    return len(peaks)
 
 '''
 
@@ -343,7 +474,9 @@ def calculate_statistics(daily_serie):
     kurtosis_value = kurtosis(daily_serie['activity'], fisher=False)
     skewness = skew(daily_serie['activity'])
 
-    return mean, sd, proportion_zero, kurtosis_value, skewness
+    count_peaks = count_peaks_above_mean(daily_serie['activity'], mean)
+
+    return mean, sd, proportion_zero, kurtosis_value, skewness, count_peaks
 
 def stats_day_night(df_day_night):
     for key in set(df_day_night.keys()):
@@ -433,6 +566,8 @@ if __name__ == '__main__':
     #print(control)
     control_patient = loadDataset.get_dataset_joined()
 
+    process = PreProcessing(control, patient)
+
 
     # EDA
     if generate_baseline_info:
@@ -446,15 +581,23 @@ if __name__ == '__main__':
         graph_activity_by_period(control)
 
 
-    # dataset with day and night
+    # dataset in time periods
 
     processed_dataset = process_dataset_byday(control_patient)
     df_time_period = split_time_period(processed_dataset)
     baseline_time_period = build_baseline_from_timeperiod(df_time_period)
     #df_day_night = stats_day_night(df_day_night)
 
-    expBaseline = baseline_eda.ExportBaseline()
-    expBaseline.generate_baseline_csv(baseline_time_period, "baseline_time_period.csv")
+    baseline_eda.baseline_dimension(baseline_time_period)
+    baseline_eda.plot_line_graph(df_time_period)
+
+    list_morning_values = ['morning_mean', 'morning_sd', 'morning_prop_zero',
+            'morning_kurtosis', 'morning_skewness']
+    baseline_eda.box_plot_simple(baseline_time_period, list_morning_values)
+
+    if export_baseline_to_csv:
+        expBaseline = baseline_eda.ExportBaseline()
+        expBaseline.generate_baseline_csv(baseline_time_period, "baseline_time_period.csv")
 
 
     # graphs for day night
