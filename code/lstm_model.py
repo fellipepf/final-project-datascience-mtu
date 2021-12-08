@@ -24,6 +24,10 @@ from keras.layers.convolutional import MaxPooling1D
 from keras.utils.np_utils import to_categorical
 from sklearn.model_selection import train_test_split
 
+from datetime import datetime
+
+from tensorflow import keras
+
 from psykose import LoadDataset, PreProcessing, eda_baseline_date_range
 
 
@@ -70,15 +74,12 @@ def process_dataset(dataset):
     return x_values, y_values
 
 def create_time_window(df_dataset):
-    RANDOM_SEED = 24
     N_TIME_STEPS = 50  # 50 records in each sequence
     N_FEATURES = 1  # x, y, z
     step = 10  # window overlap = 50 -10 = 40  (80% overlap)
     N_CLASSES = 2  # class labels
-    N_EPOCHS = 50
-    BATCH_SIZE = 1024
-    LEARNING_RATE = 0.0025
-    L2_LOSS = 0.0015
+
+
 
     segments = []
     labels = []
@@ -97,75 +98,88 @@ def create_time_window(df_dataset):
     print(labels)
     print(labels.shape)
 
-    X_train, X_test, y_train, y_test = train_test_split(reshaped_segments, labels, test_size=0.2,
-                                                        random_state=RANDOM_SEED)
+    return reshaped_segments, labels
+
+
+def split_dataset(x_values, y_values):
+    RANDOM_SEED = 24
+    #x = dstack(x_values)
+    X_train, X_test, y_train, y_test = train_test_split(x_values, y_values, test_size=0.2, random_state=RANDOM_SEED)
+
     print(X_train.shape, y_train.shape)
     print(X_test.shape, y_test.shape)
 
+    return X_train, X_test, y_train, y_test
+
+
+def evaluate_ltsm_model(X_train, X_test, y_train, y_test):
     # LSTM model
+    print("LSTM model running...")
 
     epochs = 50
     batch_size = 1024
+    verbose = 1
 
     model = Sequential()
     # RNN layer
-    model.add(LSTM(units=128, input_shape=(X_train.shape[1], X_train.shape[2])))  # input_shape = 50, 3
+    model.add(LSTM(units=128, input_shape=(X_train.shape[1], X_train.shape[2])))
     # Dropout layer
-    model.add(Dropout(0.4))
+    model.add(Dropout(0.5))
     # Dense layer with ReLu
     model.add(Dense(units=64, activation='relu'))
     # Softmax layer
     model.add(Dense(y_train.shape[1], activation='softmax'))
     # Compile model
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    #model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='mean_squared_error', optimizer=keras.optimizers.Adam(0.001), metrics=['accuracy'])
     model.summary()
 
 
     # Training
     history = model.fit(X_train, y_train, epochs = epochs,
-                    validation_split = 0.25, batch_size = batch_size, verbose = 1)
+                    validation_split = 0.25, batch_size = batch_size, verbose = verbose)
+    _, accuracy = model.evaluate(X_test, y_test, batch_size=batch_size, verbose=verbose)
 
-def split_dataset(x_values, y_values):
-    #(n observations, n columns
 
-    #x = dstack(x_values)
-    x = np.asarray(x_values)
-    y = np.asarray(y_values)
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=1)
+def evaluate_cnn_model(X_train, X_test, y_train, y_test):
+    print("CNN model running...")
+    verbose, epochs, batch_size = 1, 10, 32
+    n_timesteps, n_features, n_outputs = X_train.shape[1], X_train.shape[2], y_train.shape[1]
 
-    return X_train, X_test, y_train, y_test
+    model = Sequential()
+    model.add(Conv1D(filters=128, kernel_size=3, activation='relu', input_shape=(n_timesteps, n_features)))
+    model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
+    model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(MaxPooling1D(pool_size=2))
+    model.add(Flatten())
+    model.add(Dense(200, activation='relu'))
+    model.add(Dense(n_outputs, activation='softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    # fit network
+    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    # evaluate model
+    _, accuracy = model.evaluate(X_test, y_test, batch_size=batch_size, verbose=verbose)
+    return accuracy
 
-# fit and evaluate a model
-def evaluate_model(trainX, testX, trainy, testy):
-	verbose, epochs, batch_size = 0, 10, 32
-	n_timesteps, n_features, n_outputs = trainX.shape[2], trainX.shape[0], 1
-    #n_timesteps, n_features, n_outputs = trainX.shape[2], trainX.shape[1], trainy.shape[1]
-	model = Sequential()
-	model.add(Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=(n_timesteps,n_features)))
-	model.add(Conv1D(filters=64, kernel_size=3, activation='relu'))
-	model.add(Dropout(0.5))
-	model.add(MaxPooling1D(pool_size=2))
-	model.add(Flatten())
-	model.add(Dense(100, activation='relu'))
-	model.add(Dense(n_outputs, activation='softmax'))
-	model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-	# fit network
-	model.fit(trainX, trainy, epochs=epochs, batch_size=batch_size, verbose=verbose)
-	# evaluate model
-	_, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
-	return accuracy
 
 if __name__ == '__main__':
     dict_dataset = LoadDataset().get_dataset_joined()
     preProcessing = PreProcessing(dict_dataset)
     df_dataset = preProcessing.df_dataset
 
-    create_time_window(df_dataset)
+    x_values, y_values = create_time_window(df_dataset)
 
     #x_values, y_values = process_dataset(control | patient )
-    #X_train, X_test, y_train, y_test = split_dataset(x_values, y_values)
+    X_train, X_test, y_train, y_test = split_dataset(x_values, y_values)
 
-    #evaluate_model(X_train, X_test, y_train, y_test)
+    start_time = datetime.now()
+
+    evaluate_ltsm_model(X_train, X_test, y_train, y_test)
+    #evaluate_cnn_model(X_train, X_test, y_train, y_test)
+
+    time_elapsed = datetime.now() - start_time
+    print('Time elapsed (hh:mm:ss.ms) {}'.format(time_elapsed))
 
     #range_info = eda_baseline_date_range(control)
 
