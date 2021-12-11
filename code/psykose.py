@@ -15,6 +15,7 @@ from scipy.stats import kurtosis, skew
 from collections import OrderedDict
 
 import baseline_eda
+import log_configuration
 from collected_days import DaysCollected
 import utils
 
@@ -25,6 +26,8 @@ class Target(Enum):
 class LoadDataset:
 
     def __init__(self):
+        self.logger = log_configuration.logger
+
         self.control, self.patient = self.create_structure()
 
     def loadFileCSV(self, dir, Target):
@@ -44,6 +47,8 @@ class LoadDataset:
 
 
     def create_structure(self):
+        self.logger.info('Loading files...')
+
         #dir_control = "../psykose/control/*.csv"
         dir_control = "/Users/fellipeferreira/OneDrive/CIT - Master Data Science/Semester 3/project/final-project-datascience-mtu/psykose/control/*.csv"
         #dir_patient = "../psykose/patient/*.csv"
@@ -144,7 +149,7 @@ class PreProcessing:
             df_ts['user'] = key
             df_ts['class'] = value['user_class']
 
-            df_data_set = df_data_set.append(df_ts)
+            df_data_set = df_data_set.append(df_ts, ignore_index=True )
 
         return df_data_set
 
@@ -163,7 +168,9 @@ class CreateBaseline:
     def baseline_paper(self):
         pass
 
-
+class PlotGraphs:
+    def __init__(self, *args):
+        pass
 
 '''
 This function reduce the dataset to the number of days for each person
@@ -279,15 +286,7 @@ def generate_baseline(dataset):
 
 
 
-#
-def graph_timeserie(patient):
-    # graph
 
-    userid = 'patient_1'
-    df_patient = patient[userid]['timeserie']
-
-    df_patient.plot(x="timestamp",y="activity")
-    plt.show()
 
 
 
@@ -400,9 +399,9 @@ def build_baseline_from_timeperiod(df_day_night):
         user_class = value['user_class']
 
         for morning, afternoon, evening in zip(morning_df_list, afternoon_df_list, evening_df_list):
-            morning_mean, morning_sd, morning_prop_zero, morning_kurtosis, morning_skewness, morning_peaks = calculate_statistics(morning)
-            afternoon_mean, afternoon_sd, afternoon_prop_zero, afternoon_kurtosis, afternoon_skewness, afternoon_peaks = calculate_statistics(afternoon)
-            evening_mean, evening_sd, evening_prop_zero, evening_kurtosis, evening_skewness, evening_peaks = calculate_statistics(evening)
+            morning_mean, morning_sd, morning_prop_zero, morning_kurtosis, morning_skewness, morning_peaks, morning_max, morning_median, morning_mad = calculate_statistics(morning)
+            afternoon_mean, afternoon_sd, afternoon_prop_zero, afternoon_kurtosis, afternoon_skewness, afternoon_peaks, afternoon_max, afternoon_median, afternoon_mad = calculate_statistics(afternoon)
+            evening_mean, evening_sd, evening_prop_zero, evening_kurtosis, evening_skewness, evening_peaks, evening_max, evening_median, evening_mad = calculate_statistics(evening)
 
             row_stats = {'userid': key, 'class': user_class.value,
                          'morning_mean': morning_mean,
@@ -411,6 +410,9 @@ def build_baseline_from_timeperiod(df_day_night):
                          'morning_kurtosis': morning_kurtosis,
                          'morning_skewness': morning_skewness,
                          'morning_peaks': morning_peaks,
+                         'morning_max': morning_max,
+                         'morning_median': morning_median,
+                         'morning_mad': morning_mad,
 
                          'afternoon_mean': afternoon_mean,
                          'afternoon_sd': afternoon_sd,
@@ -418,21 +420,27 @@ def build_baseline_from_timeperiod(df_day_night):
                          'afternoon_kurtosis': afternoon_kurtosis,
                          'afternoon_skewness': afternoon_skewness,
                          'afternoon_peaks': afternoon_peaks,
+                         'afternoon_max': afternoon_max,
+                         'afternoon_median': afternoon_median,
+                         'afternoon_mad': afternoon_mad,
 
                          'evening_mean': evening_mean,
                          'evening_sd': evening_sd,
                          'evening_prop_zero': evening_prop_zero,
                          'evening_kurtosis': evening_kurtosis,
                          'evening_skewness': evening_skewness,
-                         'evening_peaks': evening_peaks
+                         'evening_peaks': evening_peaks,
+                         'evening_max': evening_max,
+                         'evening_median': evening_median,
+                         'evening_mad': evening_mad
 
                          }
             df_stats = df_stats.append(row_stats, ignore_index=True)
 
     df_stats = df_stats[['userid', 'class',
-                         'morning_mean', 'morning_sd', 'morning_prop_zero', 'morning_kurtosis', 'morning_skewness', 'morning_peaks',
-                         'afternoon_mean', 'afternoon_sd', 'afternoon_prop_zero', 'afternoon_kurtosis', 'afternoon_skewness', 'afternoon_peaks',
-                         'evening_mean', 'evening_sd', 'evening_prop_zero', 'evening_kurtosis', 'evening_skewness','evening_peaks'
+                         'morning_mean', 'morning_sd', 'morning_prop_zero', 'morning_kurtosis', 'morning_skewness', 'morning_peaks','morning_max','morning_median', 'morning_mad',
+                         'afternoon_mean', 'afternoon_sd', 'afternoon_prop_zero', 'afternoon_kurtosis', 'afternoon_skewness', 'afternoon_peaks','afternoon_max','afternoon_median', 'afternoon_mad',
+                         'evening_mean', 'evening_sd', 'evening_prop_zero', 'evening_kurtosis', 'evening_skewness','evening_peaks', 'evening_max','evening_median', 'evening_mad'
                          ]]
 
     return df_stats
@@ -475,8 +483,14 @@ def calculate_statistics(daily_serie):
     skewness = skew(daily_serie['activity'])
 
     count_peaks = count_peaks_above_mean(daily_serie['activity'], mean)
+    max = daily_serie['activity'].max()
+    median = daily_serie['activity'].median()
 
-    return mean, sd, proportion_zero, kurtosis_value, skewness, count_peaks
+    #mean absolute deviation
+    x = daily_serie['activity']  # pd.Series()
+    mad = (x - x.median()).abs().median()
+
+    return mean, sd, proportion_zero, kurtosis_value, skewness, count_peaks, max, median, mad
 
 def stats_day_night(df_day_night):
     for key in set(df_day_night.keys()):
@@ -550,6 +564,7 @@ def eda_baseline_date_range(baseline):
 
 
 if __name__ == '__main__':
+    logger = log_configuration.logger
 
     ##configuration
     export_baseline_to_html = False
@@ -566,8 +581,13 @@ if __name__ == '__main__':
     #print(control)
     control_patient = loadDataset.get_dataset_joined()
 
-    process = PreProcessing(control, patient)
 
+
+    #in construction
+    data_process = PreProcessing(control, patient)
+
+    #baseline_eda.plot_graph_one_day(data_process.control_patient_byday)
+    baseline_eda.plot_graph_periods_of_day(data_process.control_patient_byday)
 
     # EDA
     if generate_baseline_info:
@@ -575,7 +595,7 @@ if __name__ == '__main__':
 
     #graph of entire timeserie of a given person
     if show_timeseries_graph:
-        graph_timeserie(patient)
+        baseline_eda.graph_timeserie(patient)
         graph_patient_avg_by_hour(patient)
         graph_control_avg_by_hour(control)
         graph_activity_by_period(control)
