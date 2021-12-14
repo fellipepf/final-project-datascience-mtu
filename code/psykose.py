@@ -76,6 +76,8 @@ class LoadDataset:
 class PreProcessing:
 
     def __init__(self, *args):
+        self.logger = log_configuration.logger
+
         if len(args) == 1:
             self.control_patient = args[0]
 
@@ -92,10 +94,14 @@ class PreProcessing:
         #transform dataset from dict to just one dataframe
         self.df_dataset =  self.create_one_df_struture(self.control_patient_byday)
 
+        self.df_structure_category(self.df_dataset)
+
     '''
     This function reduce the dataset to the number of days for each person
     '''
     def __process_dataset_byday(self, dataset):
+        self.logger.info('Split dataset by day...')
+
         dic_result = dict()
         remove_fist_day = True
 
@@ -140,6 +146,8 @@ class PreProcessing:
 
 
     def create_one_df_struture(self, control_patient_byday):
+        self.logger.info('Creating dataframe with all values...')
+
         df_data_set = pd.DataFrame()
 
         for key, value in control_patient_byday.items():
@@ -152,6 +160,24 @@ class PreProcessing:
             df_data_set = df_data_set.append(df_ts, ignore_index=True )
 
         return df_data_set
+
+    def df_structure_category(self, df_data_set):
+        df_data_set = df_data_set.set_index('datetime')
+        df_data_set['category'] = None
+
+        #morning
+        df_data_set['category'][(df_data_set.index.hour >= 0) & (df_data_set.index.hour < 7)] = 0
+
+        #afternoon
+        df_data_set['category'][(df_data_set.index.hour >= 7) & (df_data_set.index.hour < 19)] = 1
+
+        #night
+        df_data_set['category'][(df_data_set.index.hour >= 19) & (df_data_set.index.hour < 24)] = 2
+
+        #n = df_data_set[df_data_set['category'] == None ]
+
+        return df_data_set
+
 
 
 
@@ -585,8 +611,8 @@ if __name__ == '__main__':
 
     #in construction
     data_process = PreProcessing(control, patient)
-
-    #baseline_eda.plot_graph_one_day(data_process.control_patient_byday)
+    baseline_eda.find_peak_above_avg(data_process.control_patient_byday)
+    baseline_eda.plot_graph_one_day(data_process.control_patient_byday)
     baseline_eda.plot_graph_periods_of_day(data_process.control_patient_byday)
 
     # EDA

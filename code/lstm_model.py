@@ -8,7 +8,6 @@ import pandas as pd
 from numpy import mean
 from numpy import std
 from numpy import dstack
-from pandas import read_csv
 from matplotlib import pyplot
 
 from scipy import stats
@@ -74,20 +73,18 @@ def process_dataset(dataset):
     return x_values, y_values
 
 def create_time_window(df_dataset):
-    N_TIME_STEPS = 50  # 50 records in each sequence
-    N_FEATURES = 1  # x, y, z
+    N_TIME_STEPS = 300  # 50 records in each sequence
+    N_FEATURES = 1  # activuty
     step = 10  # window overlap = 50 -10 = 40  (80% overlap)
-    N_CLASSES = 2  # class labels
-
 
 
     segments = []
     labels = []
     classes = [c.name for c in df_dataset['class']]
     for i in range(0, df_dataset.shape[0] - N_TIME_STEPS, step):
-        xs = df_dataset['activity'].values[i: i + 50]
+        xs = df_dataset['activity'].values[i: i + N_TIME_STEPS]
 
-        label = stats.mode(classes[i: i + 50])[0][0]
+        label = stats.mode(classes[i: i + N_TIME_STEPS])[0][0]
         segments.append([xs])
         labels.append(label)
 
@@ -116,7 +113,7 @@ def evaluate_ltsm_model(X_train, X_test, y_train, y_test):
     # LSTM model
     print("LSTM model running...")
 
-    epochs = 50
+    epochs = 20
     batch_size = 1024
     verbose = 1
 
@@ -143,7 +140,10 @@ def evaluate_ltsm_model(X_train, X_test, y_train, y_test):
 
 def evaluate_cnn_model(X_train, X_test, y_train, y_test):
     print("CNN model running...")
-    verbose, epochs, batch_size = 1, 10, 32
+    verbose = 1
+    epochs = 20
+    batch_size = 32
+
     n_timesteps, n_features, n_outputs = X_train.shape[1], X_train.shape[2], y_train.shape[1]
 
     model = Sequential()
@@ -153,7 +153,7 @@ def evaluate_cnn_model(X_train, X_test, y_train, y_test):
     model.add(Dropout(0.5))
     model.add(MaxPooling1D(pool_size=2))
     model.add(Flatten())
-    model.add(Dense(200, activation='relu'))
+    model.add(Dense(100, activation='relu'))
     model.add(Dense(n_outputs, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     # fit network
@@ -164,7 +164,9 @@ def evaluate_cnn_model(X_train, X_test, y_train, y_test):
 
 
 if __name__ == '__main__':
+
     dict_dataset = LoadDataset().get_dataset_joined()
+
     preProcessing = PreProcessing(dict_dataset)
     df_dataset = preProcessing.df_dataset
 
