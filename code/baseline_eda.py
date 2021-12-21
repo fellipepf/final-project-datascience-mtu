@@ -10,6 +10,9 @@ from matplotlib import pyplot as plt, dates as mdates
 import seaborn as sns
 import matplotlib.ticker as ticker
 from matplotlib.pyplot import figure
+from scipy.signal import find_peaks
+
+
 
 class ExportBaseline:
     def __init__(self):
@@ -102,6 +105,20 @@ def graph_timeserie(patient):
     df_patient.plot(x="timestamp",y="activity")
     plt.show()
 
+def graph_timeserie_byid(df_dataset, user_id='patient_1'):
+
+    if user_id == None:
+        user_id = 'patient_1'
+    df_dataset = df_dataset.set_index('datetime')
+    df_patient = df_dataset[user_id]['timeserie']
+
+    #df_patient.plot(x="timestamp",y="activity")
+
+    sns.lineplot(x="timestamp", y="activity", data=df_patient)
+    sns.set(style='dark', )
+    plt.xlabel("x-axis")
+    plt.title("title")
+    plt.show()
 
 
 ##### Baseline period of the day EDA graphs
@@ -131,6 +148,7 @@ def plot_line_graph(df_time_period):
 
 def plot_graph_one_day(df_time_period, id_user=None):
     id_user = "control_31"
+    id_user = "patient_1"
     values = df_time_period[id_user]
 
     df_first_day = values['timeserie'][0]
@@ -149,7 +167,7 @@ def plot_graph_one_day(df_time_period, id_user=None):
 
 
 def plot_graph_periods_of_day(df_time_period, id_user=None):
-    id_user = "control_1"
+    id_user = "patient_1"
 
     values = df_time_period[id_user]
 
@@ -193,6 +211,58 @@ def plot_graph_periods_of_day(df_time_period, id_user=None):
     fig.suptitle(f"Time Serie of user: {id_user}")
 
     plt.show()
+
+def find_peak_above_avg(df_time_period, id_user=None):
+
+    if id_user == None:
+        id_user = "patient_1"
+
+    values = df_time_period[id_user]
+
+    df_first_day = values['timeserie'][0]
+    df_first_day = df_first_day.set_index('datetime')
+
+    fig, ax = plt.subplots(3, 1, figsize=(11, 4))
+
+    morning = df_first_day.between_time('0:00', '6:59')
+    avg_morning = morning['activity'].mean()
+    morning_values = morning['activity'].values
+
+    morning_peaks, _ = find_peaks(morning_values, height=avg_morning)
+    ax[0].plot(morning_values)
+    ax[0].plot(morning_peaks, morning_values[morning_peaks], "x")
+    ax[0].set_xlabel("Time")
+    ax[0].set_ylabel("Activity")
+
+    # this is one day range so after 23:59 is not in this period of time
+    afternoon = df_first_day.between_time('7:00', '19:00', include_start=True, include_end=False)
+    avg_afternoon = afternoon['activity'].mean()
+    afternoon_values = afternoon['activity'].values
+
+    afternoon_peaks, _ = find_peaks(afternoon_values, height=avg_afternoon)
+    ax[1].plot(afternoon_values)
+    ax[1].plot(afternoon_peaks, afternoon_values[afternoon_peaks], "x")
+    ax[1].set_xlabel("Time")
+    ax[1].set_ylabel("Activity")
+
+
+    evening = df_first_day.between_time('19:00', '00:00', include_start=True, include_end=False)
+    avg_evening = evening['activity'].mean()
+    evening_values = evening['activity'].values
+
+    evening_peaks, _ = find_peaks(evening_values, height=avg_evening)
+    ax[2].plot(evening_values)
+    ax[2].plot(evening_peaks, evening_values[evening_peaks], "x")
+    ax[2].set_xlabel("Time")
+    ax[2].set_ylabel("Activity")
+
+
+
+    fig.suptitle(f"Time Serie of user: {id_user}")
+
+    plt.show()
+
+
 
 if __name__ == '__main__':
 
