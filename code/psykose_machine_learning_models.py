@@ -23,7 +23,9 @@ from sklearn.model_selection import LeaveOneOut
 #from matplotlib import pyplot
 from xgboost import plot_importance
 import log_configuration
+import hyperparameter_tuning as tuning
 from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RepeatedStratifiedKFold
 
 color = sns.color_palette()
 
@@ -586,6 +588,43 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
     return df_result_kfold, df_leave_one_out, df_feature_importance
 
 
+def hyper_tuning_random_forest():
+    # Create the parameter grid based on the results of random search
+    param_grid = {
+        'bootstrap': [True],
+        'max_depth': [80, 90, 100, 110],
+        'max_features': [2, 3],
+        'min_samples_leaf': [3, 4, 5],
+        'min_samples_split': [8, 10, 12],
+        'n_estimators': [100, 200, 300, 1000]
+    }
+    # Create a based model
+    rf = RandomForestClassifier()
+    # Instantiate the grid search model
+    grid_search = GridSearchCV(estimator=rf, param_grid=param_grid,
+                               cv=3, n_jobs=-1, verbose=2)
+
+    # Fit the grid search to the data
+    #X_TRAIN, X_TEST, Y_TRAIN, Y_TEST
+    grid_search.fit(X_TRAIN, Y_TRAIN)
+
+    print(grid_search.best_params_)
+
+def hyper_tuning(model, grid_params ):
+
+    cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
+    grid_search = GridSearchCV(estimator=model, param_grid=grid_params, n_jobs=-1, cv=cv, scoring='accuracy', error_score=0, verbose=2)
+    grid_result = grid_search.fit(X_TRAIN, Y_TRAIN)
+
+    # summarize results
+    print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
+    means = grid_result.cv_results_['mean_test_score']
+    stds = grid_result.cv_results_['std_test_score']
+    params = grid_result.cv_results_['params']
+    for mean, stdev, param in zip(means, stds, params):
+        print("%f (%f) with: %r" % (mean, stdev, param))
+
+
 def check_options(*options):
     '''
     Verify if only one validation/split method is chosen
@@ -605,24 +644,28 @@ if __name__ == '__main__':
     logger = log_configuration.logger
     logger.info("Script started...")
 
-    run_hyper_tuning = False
+    run_hyper_tuning = True
     run_models = False
     check_options(run_hyper_tuning, run_models)
 
     if run_hyper_tuning:
-        pass
-
+        #hyper_tuning(model, param_grid)
+        tuning.run_tuning(X_TRAIN, X_TEST, Y_TRAIN, Y_TEST)
 
     # Data Frame to collect all results of the classifiers
     df_result_kfold = pd.DataFrame()
     df_feature_importance = pd.DataFrame()
     df_leave_one_out = pd.DataFrame()
 
+    if run_models:
+        df_result_kfold, df_leave_one_out, df_feature_importance = logistic_regression(df_result_kfold,
+                                                                                       df_leave_one_out,
+                                                                                       df_feature_importance)
+        # df_result_kfold, df_leave_one_out, df_feature_importance = random_forest(df_result_kfold, df_leave_one_out,df_feature_importance)
+        # df_result_kfold, df_leave_one_out, df_feature_importance = decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance)
+        # df_result_kfold, df_leave_one_out, df_feature_importance = xgboost(df_result_kfold, df_leave_one_out, df_feature_importance)
+        # df_result_kfold, df_leave_one_out, df_feature_importance = light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance)
 
-    df_result_kfold, df_leave_one_out, df_feature_importance = logistic_regression(df_result_kfold, df_leave_one_out,df_feature_importance)
-    #df_result_kfold, df_leave_one_out, df_feature_importance = random_forest(df_result_kfold, df_leave_one_out,df_feature_importance)
-    #df_result_kfold, df_leave_one_out, df_feature_importance = decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance)
-    #df_result_kfold, df_leave_one_out, df_feature_importance = xgboost(df_result_kfold, df_leave_one_out, df_feature_importance)
-    #df_result_kfold, df_leave_one_out, df_feature_importance = light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance)
+
 
     print(df_result_kfold)
