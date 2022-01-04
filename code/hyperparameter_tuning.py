@@ -1,7 +1,9 @@
 
 import sys
 import numpy as np
+
 from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.model_selection import RepeatedStratifiedKFold
 
 from sklearn.linear_model import LogisticRegression
@@ -76,6 +78,54 @@ def define_params():
 
     params_dic[Classifiers.DT.name] = dt_param_grid
 
+    xgb_param_tuning = {
+        'learning_rate': [0.01, 0.1],
+        'max_depth': [3, 5, 7, 10],
+        'min_child_weight': [1, 3, 5],
+        'subsample': [0.5, 0.7, 1.0],
+        'colsample_bytree': [0.5, 0.7, 1.0],
+        'n_estimators' : [100, 200, 500],
+        'objective': ['reg:squarederror', "binary:logistic"]
+    }
+    #Best: 0.865714 using {'subsample': 0.5, 'objective': 'reg:squarederror', 'n_estimators': 500, 'min_child_weight': 3, 'max_depth': 7, 'learning_rate': 0.01, 'colsample_bytree': 0.7}
+
+    params_dic[Classifiers.XGB.name] = xgb_param_tuning
+
+    xgb_skt_param_grid = {
+        'n_estimators': [5, 10, 50, 100, 250, 500,1000],
+        'learning_rate': [0.001, 0.01, 0.1, 1],
+        'subsample': [0.5, 0.7, 1.0],
+        'max_depth': [3,5, 7, 9],
+        'min_weight_fraction_leaf': np.linspace(0.0, 0.5, 5, endpoint=True ),
+        'max_features': ['auto', 'sqrt', 'log2'],
+        'max_leaf_nodes': [3,5,10,12]
+    }
+    #gridseach
+    #Best: 0.885154 using {'learning_rate': 0.1, 'max_depth': 3, 'n_estimators': 1000, 'subsample': 0.5}
+    #random search
+    #Best: 0.839608 using {'subsample': 0.7, 'n_estimators': 500, 'min_weight_fraction_leaf': 0.375, 'max_leaf_nodes': 12, 'max_features': 'auto', 'max_depth': 7, 'learning_rate': 0.01}
+    #Best: 0.863922 using {'subsample': 1.0, 'n_estimators': 250, 'min_weight_fraction_leaf': 0.0, 'max_leaf_nodes': 3, 'max_features': 'log2', 'max_depth': 7, 'learning_rate': 1}
+
+    params_dic[Classifiers.XGB_skt.name] = xgb_skt_param_grid
+
+    lgbm_params = {
+        'bagging_fraction': (0.5, 0.8),
+        'bagging_freq': (5, 8),
+        "learning_rate": (0.01, 0.1, 1),
+        'feature_fraction': (0.5, 0.8),
+        'max_depth': (5, 10, 13),
+        'min_data_in_leaf': (90, 120),
+        'num_leaves': (10, 20,30),
+        'colsample_bytree': (0.01, 1.0, 'uniform'),  # enabler of bagging fraction
+        'min_child_weight': (0, 10),  # minimal number of data in one leaf.
+        'subsample_for_bin': (100000, 500000),  # number of data that sampled for histogram bins
+    }
+    #Best: 0.849300 using {'bagging_fraction': 0.8, 'bagging_freq': 8, 'feature_fraction': 0.5, 'max_depth': 10, 'min_data_in_leaf': 90, 'num_leaves': 1200}
+#random
+    #Best: 0.846639 using {'subsample_for_bin': 500000, 'num_leaves': 10, 'min_data_in_leaf': 90, 'min_child_weight': 10, 'max_depth': 13, 'learning_rate': 1, 'feature_fraction': 0.5, 'colsample_bytree': 0.01, 'bagging_freq': 5, 'bagging_fraction': 0.8}
+
+    params_dic[Classifiers.LGBM.name] = lgbm_params
+
     return params_dic
 
 def define_classifiers():
@@ -84,18 +134,27 @@ def define_classifiers():
     classifiers_dic[Classifiers.LR.name] = LogisticRegression()
     classifiers_dic[Classifiers.RF.name] = RandomForestClassifier()
     classifiers_dic[Classifiers.DT.name] = DecisionTreeClassifier()
+    classifiers_dic[Classifiers.XGB.name] = xgb.XGBClassifier()
+    classifiers_dic[Classifiers.XGB_skt.name] = GradientBoostingClassifier()
+    classifiers_dic[Classifiers.LGBM.name] = lgb.LGBMClassifier()
 
     return classifiers_dic
 
 def hyper_tuning(model, grid_params, X_TRAIN, X_TEST, Y_TRAIN, Y_TEST):
+    scores = [
+        # 'precision',
+        'recall',
+        # 'f1'
+    ]
 
     cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
-    grid_search = GridSearchCV(estimator=model, param_grid=grid_params, n_jobs=-1, cv=cv, scoring='accuracy', error_score=0, verbose=2)
-    grid_result = grid_search.fit(X_TRAIN, Y_TRAIN)
+    #search_method = GridSearchCV(estimator=model, param_grid=grid_params, n_jobs=-1, cv=cv, scoring='accuracy', error_score=0, verbose=2)
+    search_method = RandomizedSearchCV(estimator=model, param_distributions=grid_params, n_jobs=-1, cv=cv, scoring='accuracy', error_score=0, n_iter=15, verbose=2)
+    grid_result = search_method.fit(X_TRAIN, Y_TRAIN)
 
     # summarize results
     print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
-
+    print("\n")
     means = grid_result.cv_results_['mean_test_score']
     stds = grid_result.cv_results_['std_test_score']
     params = grid_result.cv_results_['params']
@@ -103,20 +162,17 @@ def hyper_tuning(model, grid_params, X_TRAIN, X_TEST, Y_TRAIN, Y_TEST):
     for mean, stdev, param in zip(means, stds, params):
         print("%f (%f) with: %r" % (mean, stdev, param))
 
-    best_grid = grid_search.best_estimator_
+    best_grid = search_method.best_estimator_
     grid_accuracy = evaluate(best_grid, X_TEST, Y_TEST)
+
+    print(grid_accuracy)
 
 def run_tuning(X_TRAIN, X_TEST, Y_TRAIN, Y_TEST):
     classifiers = define_classifiers()
     params = define_params()
 
     #select classifiers to be tuned
-    classifier = Classifiers.DT.name
-
-
-    xgb_model = GradientBoostingClassifier()
-#    light_gbm = lgb()
-
+    classifier = Classifiers.LGBM.name
 
     hyper_tuning(classifiers[classifier], params[classifier], X_TRAIN, X_TEST, Y_TRAIN, Y_TEST )
 
