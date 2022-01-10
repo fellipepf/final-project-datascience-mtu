@@ -10,7 +10,7 @@ class ModelMetrics:
         self.y_preds = y_preds
 
     def accuracy(self):
-        return accuracy_score(self.y_true, self.y_preds)
+        return accuracy_score(self.y_true, self.y_preds.round())
 
     def precision(self):
         return precision_score(self.y_true, self.y_preds, average=None)
@@ -22,7 +22,7 @@ class ModelMetrics:
         return recall_score(self.y_true, self.y_preds)
 
     def f1_score(self):
-        return f1_score(self.y_true, self.y_preds)
+        return f1_score(self.y_true, self.y_preds.round())
 
     def precision_recall_fscore_support(self):
         return precision_recall_fscore_support(self.y_true, self.y_preds)
@@ -30,13 +30,14 @@ class ModelMetrics:
     def classification_report(self):
         return classification_report(self.y_true, self.y_preds)
 
-    def auc(self):
+    def auc_roc(self):
         fpr, tpr, _ = metrics.roc_curve(self.y_true, self.y_preds)
         return metrics.auc(fpr, tpr)
 
-    def matthews_corrcoef(self):
-        return matthews_corrcoef(self.y_true, self.y_preds)
+    def matthews_corrcoef(self, round=None):
+        return matthews_corrcoef(self.y_true, self.y_preds.round())
 
+    #may can cause error
     def all_metrics(self):
         all_metrics = {}
         all_metrics["accuracy"] = self.accuracy()
@@ -46,7 +47,7 @@ class ModelMetrics:
         all_metrics["f1_score"] = self.f1_score()
         all_metrics["precision_recall_fscore_support"] = self.precision_recall_fscore_support()
         all_metrics["classification_report"] = self.classification_report()
-        all_metrics["auc"] = self.auc()
+        all_metrics["auc_roc"] = self.auc_roc()
         all_metrics["matthews_corrcoef"] = self.matthews_corrcoef()
 
         return all_metrics

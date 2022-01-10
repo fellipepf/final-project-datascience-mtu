@@ -240,9 +240,10 @@ def create_confusion_matrix(y_true, y_preds, classifier_name=None):
 
     plt.show()
 
-def plot_feature_importance(series_fi, classifier_name):
+def plot_feature_importance(series_fi, classifier_name, method_name):
     series_fi = series_fi.sort_values(ascending=False)
-    series_fi.plot(kind='barh', title=f'Feature Importance - {classifier_name}')
+    series_fi.plot(kind='barh', title=f'Feature Importance - {classifier_name} - {method_name}')
+    plt.xlabel("Importance")
     plt.show()
 
 class ValidationMethod(enum.Enum):
@@ -260,13 +261,14 @@ class Metric(enum.Enum):
     f1_score = "F1-Score"
 
 
-def create_result_output(classifier_name, method, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size):
+def create_result_output(classifier_name, method, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, testset_size):
     row_stats = {
         'Classifier': classifier_name,
         'Validation method': method,
 
         'Mattews Correlation Coef': metric_mattews_coef,
         'F1-Score': f1_score,
+        "accuracy": accuracy,
         'Average Precision': average_precision,
         'AUCROC': auc_roc,
         'testset_size': testset_size
@@ -282,20 +284,24 @@ def logreg_pred_func(model, data):
     return model.predict_proba(data)[:, 1]
 
 def logistic_regression(df_result_kfold, df_leave_one_out, df_feature_importance):
+    classifier_name = Classifier.log_reg.value
     logger = log_configuration.logger
-    logger.info("Logistic Regression...")
+    logger.info(f"{classifier_name}...")
 
-    classifier_name = "Logistic Regression"
+    method_name = ValidationMethod.KFold.value
+    method_short_name = ValidationMethod.KFold.name
+
+    logger.info(f"{classifier_name} - {method_name}")
+
 
     #kfold
-    method_name = ValidationMethod.KFold.value
-    logger.info(f"{classifier_name} - {method_name}")
-    logreg = LogisticRegression(**_PARAMS_LORGREG)
 
+    logreg = LogisticRegression(**_PARAMS_LORGREG)
     logreg, logreg_y_preds, logreg_y_trues = model_predict_k_fold(logreg_train_func, logreg_pred_func, logreg)
     logreg_test_preds = logreg_pred_func(logreg, X_TEST)
 
-    create_confusion_matrix(Y_TEST, logreg_test_preds.round(), classifier_name)
+
+    # collect the results - KFold
 
     # precision-recall curves (PRC)
     # Receiver-operator curves (ROC)
@@ -305,19 +311,20 @@ def logistic_regression(df_result_kfold, df_leave_one_out, df_feature_importance
     plot_prc_curve(logreg_test_preds, Y_TEST, "LogReg Testing PRC")
     plot_roc_curve(logreg_test_preds, Y_TEST, "LogReg Testing ROC")
 
+    # collect the result
+    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, logreg_test_preds)
 
+    create_confusion_matrix(Y_TEST, logreg_test_preds.round(), classifier_name)
 
-    # collect the results - KFold
-    metrics_kfold = my_metrics.ModelMetrics(Y_TEST, logreg_test_preds.round()).all_metrics()
+    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
+    f1_score = modelMetricsKfold.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
-    metric_mattews_coef = metrics_kfold['matthews_corrcoef']
-    f1_score = metrics_kfold['f1_score']
-
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size)
+    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef, f1_score, accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     fi_log_reg_kfold = pd.Series(logreg.coef_[0], index=X_TRAIN.columns)
-    plot_feature_importance(fi_log_reg_kfold, classifier_name)
+    plot_feature_importance(fi_log_reg_kfold, classifier_name, method_short_name)
 
     row_features = {'classifier': "Logistic Regression"}
     for index, value in fi_log_reg_kfold.items():
@@ -326,8 +333,10 @@ def logistic_regression(df_result_kfold, df_leave_one_out, df_feature_importance
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
     # Leave one out
-    logger.info("Logistic Regression - Leave-One-Out")
-    method_name = "Leave-One-Out"
+    method_name = ValidationMethod.LOO.value
+    method_short_name = ValidationMethod.LOO.name
+
+    logger.info(f"{classifier_name} - {method_name}")
 
     logreg_loo = LogisticRegression(**_PARAMS_LORGREG)
     logreg_loo, logreg_y_preds_loo, logreg_y_trues_loo = leave_one_out(logreg_train_func, logreg_pred_func, logreg_loo)
@@ -346,11 +355,15 @@ def logistic_regression(df_result_kfold, df_leave_one_out, df_feature_importance
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, logreg_loo_test_preds.round())
+    fi_log_reg_loo = pd.Series(logreg_loo.coef_[0], index=X_TRAIN.columns)
+    plot_feature_importance(fi_log_reg_loo, classifier_name, method_short_name)
+
+    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, logreg_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
+    accuracy = modelMetricsLOO.accuracy()
 
-    row_stats = create_result_output(classifier_name,method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size)
+    row_stats = create_result_output(classifier_name,method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
 
@@ -366,15 +379,16 @@ def rfc_pred_func(model, data):
     return model.predict_proba(data)[:, 1]
 
 def random_forest(df_result_kfold, df_leave_one_out, df_feature_importance):
-    classifier_name = "Random Forest"
+    classifier_name = Classifier.r_forest.value
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
 
     method_name = ValidationMethod.KFold.value
+    method_short_name = ValidationMethod.KFold.name
+
     logger.info(f"{classifier_name} - {method_name}")
 
     rfc = RandomForestClassifier(**_PARAMS_RFC)
-
     rfc, rfc_y_preds, rfc_y_trues = model_predict_k_fold(rfc_train_func, rfc_pred_func, rfc)
     rfc_test_preds = rfc_pred_func(rfc, X_TEST)
 
@@ -385,30 +399,22 @@ def random_forest(df_result_kfold, df_leave_one_out, df_feature_importance):
     plot_prc_curve(rfc_test_preds, Y_TEST, "RFC Testing PRC")
     plot_roc_curve(rfc_test_preds, Y_TEST, "RFC Testing ROC")
 
-    metric_mattews_coef = matthews_corrcoef(Y_TEST, rfc_test_preds.round())
-    f1_score = metrics.f1_score(Y_TEST, rfc_test_preds.round())
+    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, rfc_test_preds)
+
+    create_confusion_matrix(Y_TEST, rfc_test_preds.round(), classifier_name)
+
+    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
+    f1_score = modelMetricsKfold.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
     # collect the result
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size)
+    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     # get importance
     importance = rfc.feature_importances_
-    # # summarize feature importance
-    # for i, v in enumerate(importance):
-    #     print('Feature: %0d, Score: %.5f' % (i, v))
-    #
-    # # plot feature importance
-    # plt.bar([x for x in range(len(importance))], importance)
-    # plt.show()
-    #
-    # #
-    # (pd.Series(importance, index=X_TRAIN.columns)
-    #  # .nlargest(4)
-    #  .plot(kind='barh'))
-
     fi_r_forest_kfold = pd.Series(importance, index=X_TRAIN.columns)
-    plot_feature_importance(fi_r_forest_kfold, classifier_name)
+    plot_feature_importance(fi_r_forest_kfold, classifier_name, method_name)
 
     series_features = pd.Series(importance, index=X_TRAIN.columns)
     row_features = {'classifier': classifier_name}
@@ -418,7 +424,11 @@ def random_forest(df_result_kfold, df_leave_one_out, df_feature_importance):
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
     # Leave one out
-    method_name = ValidationMethod.LOO.name
+
+    method_name = ValidationMethod.LOO.value
+    method_short_name = ValidationMethod.LOO.name
+    logger.info(f"{classifier_name} - {method_name}")
+
     rfc_loo = RandomForestClassifier(**_PARAMS_RFC)
     rfc_loo, rfc_y_preds_loo, rfc_y_trues_loo = leave_one_out(rfc_train_func, rfc_pred_func, rfc_loo)
     rfc_loo_test_preds = logreg_pred_func(rfc_loo, X_TEST)
@@ -435,11 +445,17 @@ def random_forest(df_result_kfold, df_leave_one_out, df_feature_importance):
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, rfc_loo_test_preds.round())
+    importance = rfc_loo.feature_importances_
+    fi_r_forest_kfold = pd.Series(importance, index=X_TRAIN.columns)
+    plot_feature_importance(fi_r_forest_kfold, classifier_name, method_name)
+
+
+    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, rfc_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
-    row_stats = create_result_output(classifier_name,method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size)
+    row_stats = create_result_output(classifier_name,method_name, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     return df_result_kfold, df_leave_one_out, df_feature_importance
@@ -460,6 +476,7 @@ def decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance):
     logger.info(f"{classifier_name}...")
 
     method_name = ValidationMethod.KFold.value
+    method_short_name = ValidationMethod.KFold.name
     logger.info(f"{classifier_name} - {method_name}")
 
 
@@ -469,33 +486,27 @@ def decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance):
     dtc_test_preds = dtc_pred_func(dtc, X_TEST)
 
 
-    average_precision = plot_prc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation PRC")
-    auc_roc = plot_roc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation ROC")
 
-    plot_prc_curve(dtc_test_preds, Y_TEST, "RFC Testing PRC")
-    plot_roc_curve(dtc_test_preds, Y_TEST, "RFC Testing ROC")
+    plot_prc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation PRC")
+    plot_roc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation ROC")
+
+    average_precision = plot_prc_curve(dtc_test_preds, Y_TEST, "RFC Testing PRC")
+    auc_roc = plot_roc_curve(dtc_test_preds, Y_TEST, "RFC Testing ROC")
 
     # collect the result
-    metric_mattews_coef = matthews_corrcoef(Y_TEST, dtc_test_preds.round())
-    f1_score = metrics.f1_score(Y_TEST, dtc_test_preds.round())
+    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, dtc_test_preds)
+    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
+    f1_score = modelMetricsKfold.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size)
+    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     # get importance
     importance = dtc.feature_importances_
-    # # summarize feature importance
-    # for i, v in enumerate(importance):
-    #     print('Feature: %0d, Score: %.5f' % (i, v))
-    #
-    # # plot feature importance
-    # plt.bar([x for x in range(len(importance))], importance)
-    # plt.show()
-
-
 
     fi_dtree_kfold = pd.Series(importance, index=X_TRAIN.columns)
-    plot_feature_importance(fi_dtree_kfold, classifier_name)
+    plot_feature_importance(fi_dtree_kfold, classifier_name, method_short_name)
 
     series_features = pd.Series(importance, index=X_TRAIN.columns)
     row_features = {'classifier': "Decision Tree"}
@@ -505,12 +516,21 @@ def decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance):
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
     # Leave one out
-    method_name = ValidationMethod.LOO.name
+    method_name = ValidationMethod.LOO.value
+    method_short_name = ValidationMethod.LOO.name
+
     dtc_loo = RandomForestClassifier(**_PARAMS_RFC)
     dtc_loo, dtc_y_preds_loo, dtc_y_trues_loo = leave_one_out(dtc_train_func, dtc_pred_func, dtc_loo)
     dtc_loo_test_preds = logreg_pred_func(dtc_loo, X_TEST)
 
     print(classification_report(Y_TEST, dtc_loo_test_preds.round()))
+
+    # get importance
+    importance = dtc_loo.feature_importances_
+
+    fi_dtree_loo = pd.Series(importance, index=X_TRAIN.columns)
+    plot_feature_importance(fi_dtree_loo, classifier_name, method_short_name)
+
 
     dict_report = classification_report(Y_TEST, dtc_loo_test_preds.round(), output_dict=True)
     for key, value in dict_report.items():
@@ -522,12 +542,14 @@ def decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance):
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, dtc_loo_test_preds.round())
+    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, dtc_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
+    accuracy = modelMetricsLOO.accuracy()
+
 
     row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
-                                     f1_score, testset_size)
+                                     f1_score, accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     return df_result_kfold, df_leave_one_out, df_feature_importance
@@ -575,10 +597,12 @@ def xgboost(df_result_kfold, df_leave_one_out, df_feature_importance):
 
 
     #kfold
-    metric_mattews_coef = matthews_corrcoef(Y_TEST, xgb_test_preds.round())
-    f1_score = metrics.f1_score(Y_TEST, xgb_test_preds.round())
+    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, xgb_test_preds)
+    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
+    f1_score = modelMetricsKfold.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size)
+    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     # plot feature importance
@@ -608,12 +632,13 @@ def xgboost(df_result_kfold, df_leave_one_out, df_feature_importance):
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, xgb_loo_test_preds.round())
+    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, xgb_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
     row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
-                                     f1_score, testset_size)
+                                     f1_score,accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
 
@@ -659,10 +684,12 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
 
 
     # collect the result
-    metric_mattews_coef = matthews_corrcoef(Y_TEST, gbm_test_preds.round())
-    f1_score = metrics.f1_score(Y_TEST, gbm_test_preds.round())
+    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, gbm_test_preds)
+    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
+    f1_score = modelMetricsKfold.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, testset_size)
+    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     print('Plotting feature importances...')
@@ -703,12 +730,13 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, lgbm_loo_test_preds.round())
+    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, lgbm_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
+    accuracy = modelMetricsKfold.accuracy()
 
     row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
-                                     f1_score, testset_size)
+                                     f1_score,accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
 
@@ -778,9 +806,8 @@ if __name__ == '__main__':
 
     show_graphs = True
 
-    config_params = {
-
-    }
+    config_params = {}
+    config_params['show_confusion_matrix'] = True
 
     run_hyper_tuning = False
     run_models = True
@@ -797,14 +824,18 @@ if __name__ == '__main__':
     df_leave_one_out = pd.DataFrame()
 
     if run_models:
-        df_result_kfold, df_leave_one_out, df_feature_importance = logistic_regression(df_result_kfold,  df_leave_one_out, df_feature_importance)
-        df_result_kfold, df_leave_one_out, df_feature_importance = random_forest(df_result_kfold, df_leave_one_out,df_feature_importance)
-        df_result_kfold, df_leave_one_out, df_feature_importance = decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance)
-        #df_result_kfold, df_leave_one_out, df_feature_importance = xgboost(df_result_kfold, df_leave_one_out, df_feature_importance)
-        #df_result_kfold, df_leave_one_out, df_feature_importance = light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance)
 
-        results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.KFold.value, 'F1-Score')
-        results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.LOO.value, 'F1-Score')
+        #df_result_kfold, df_leave_one_out, df_feature_importance = logistic_regression(df_result_kfold,  df_leave_one_out, df_feature_importance)
+        #df_result_kfold, df_leave_one_out, df_feature_importance = random_forest(df_result_kfold, df_leave_one_out,df_feature_importance)
+        #df_result_kfold, df_leave_one_out, df_feature_importance = decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance)
+        #df_result_kfold, df_leave_one_out, df_feature_importance = xgboost(df_result_kfold, df_leave_one_out, df_feature_importance)
+        df_result_kfold, df_leave_one_out, df_feature_importance = light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance)
+
+        try:
+            results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.KFold.value, 'F1-Score')
+            results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.LOO.value, 'F1-Score')
+        except:
+            print("Something went wrong. Maybe only one model was chosen")
 
 
     print(df_result_kfold)
