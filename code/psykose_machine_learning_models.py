@@ -33,6 +33,7 @@ import psykose_machine_learning_plots as results_plot
 import hyperparameter_tuning as tuning
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import RepeatedStratifiedKFold
+from datetime import datetime
 
 color = sns.color_palette()
 
@@ -46,30 +47,24 @@ from utils import Target
 # my baseline features
 PATH_TO_FILE = "baseline_time_period.csv"
 
-penalty = ['l1', 'l2']
-C = [0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000]
-#class_weight = [{1:0.5, 0:0.5}, {1:0.4, 0:0.6}, {1:0.6, 0:0.4}, {1:0.7, 0:0.3}]
-class_weight='balanced'
-solver = ['liblinear', 'saga']
-
 
 _PARAMS_LORGREG = {
     "penalty": "l2",
-    "C": 1.0,
+    "C": 100,
     "class_weight": "balanced",
     "random_state": 2018,
-    "solver": "liblinear",
+    "solver": "saga",
     "n_jobs": 1
 }
 
 _PARAMS_RFC = {
-    "n_estimators": 10,
+    "n_estimators": 200,
     "max_features": "auto",
-    "max_depth": None,
-    "min_samples_split": 2,
-    "min_samples_leaf": 1,
+    "max_depth": 100,
+    "min_samples_split": 8,
+    "min_samples_leaf": 5,
     "min_weight_fraction_leaf": 0.0,
-    "max_leaf_nodes": None,
+    "max_leaf_nodes": 10,
     "bootstrap": True,
     "oob_score": False,
     "n_jobs": -1,
@@ -78,26 +73,39 @@ _PARAMS_RFC = {
 }
 
 _PARAMS_DTC = {
-
-    "max_features": "auto",
-    "max_depth": None,
-    "min_samples_split": 2,
-    "min_samples_leaf": 1,
+    'criterion': 'entropy',
+    "max_features": 'sqrt',
+    "max_depth": 10,
+    "min_samples_split": 6,
+    "min_samples_leaf": 4,
     "min_weight_fraction_leaf": 0.0,
-    "max_leaf_nodes": None,
+    "max_leaf_nodes": 12,
     "random_state": 2018,
     "class_weight": "balanced"
 
 }
 
 _PARAMS_XGB = {
-    "nthread": 16, "learning_rate": 0.3, "gamma": 0, "max_depth": 6, "verbosity": 0,
-    "min_child_weight": 1, "max_delta_step": 0, "subsample": 1.0, "colsample_bytree": 1.0,
-    "objective": "binary:logistic", "num_class": 1, "eval_metric": "logloss", "seed": 2018,
+    "nthread": 16,
+    "learning_rate": 0.3,
+    "gamma": 0,
+    "max_depth": 7,
+    "verbosity": 0,
+    "min_child_weight": 3,
+    "max_delta_step": 0,
+    "subsample": 0.5,
+    "colsample_bytree": 0.7,
+    "objective": "binary:logistic",
+    "num_class": 1,
+    "eval_metric": "logloss",
+    "seed": 2018,
 }
 
 _PARAMS_LIGHTGB = {
-    "task": "train", "num_class": 1, "boosting": "gbdt", "verbosity": -1,
+    "task": "train",
+    "num_class": 1,
+    "boosting": "gbdt",
+    "verbosity": -1,
     "objective": "binary", "metric": "binary_logloss", "metric_freq": 50, "is_training_metric": False,
     "max_depth": 4, "num_leaves": 31, "learning_rate": 0.1, "feature_fraction": 0.8, "bagging_fraction": 0.8,
     "bagging_freq": 0, "bagging_seed": 2018, "num_threads": 16
@@ -230,11 +238,11 @@ def leave_one_out(train_func, pred_func, model=None):
 
     return model, np.array(y_preds), np.array(y_trues)
 
-def create_confusion_matrix(y_true, y_preds, classifier_name=None):
+def create_confusion_matrix(y_true, y_preds, classifier_name=None, method_short_name=None):
     cm = confusion_matrix(y_true, y_preds) #, normalize='all'
     cmd = ConfusionMatrixDisplay(cm, display_labels=['healthy', 'patient'])
     cmd = cmd.plot(cmap=plt.cm.Blues, values_format='g')
-    cmd.ax_.set_title(f'Confusion Matrix - {classifier_name}')
+    cmd.ax_.set_title(f'Confusion Matrix - {classifier_name} - {method_short_name}')
     cmd.plot()
     #cmd.ax_.set(xlabel='Predicted', ylabel='True')
 
@@ -261,16 +269,17 @@ class Metric(enum.Enum):
     f1_score = "F1-Score"
 
 
-def create_result_output(classifier_name, method, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, testset_size):
+def create_result_output(classifier_name, method, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, time_elapsed, testset_size):
     row_stats = {
         'Classifier': classifier_name,
         'Validation method': method,
 
-        'Mattews Correlation Coef': metric_mattews_coef,
+        'Mattews Correlation Coef.': metric_mattews_coef,
         'F1-Score': f1_score,
-        "accuracy": accuracy,
+        "Accuracy": accuracy,
         'Average Precision': average_precision,
         'AUCROC': auc_roc,
+        'Training Time': time_elapsed,
         'testset_size': testset_size
     }
     return row_stats
@@ -297,7 +306,11 @@ def logistic_regression(df_result_kfold, df_leave_one_out, df_feature_importance
     #kfold
 
     logreg = LogisticRegression(**_PARAMS_LORGREG)
+
+    start_time = datetime.now()
     logreg, logreg_y_preds, logreg_y_trues = model_predict_k_fold(logreg_train_func, logreg_pred_func, logreg)
+    time_elapsed = datetime.now() - start_time
+
     logreg_test_preds = logreg_pred_func(logreg, X_TEST)
 
 
@@ -312,15 +325,14 @@ def logistic_regression(df_result_kfold, df_leave_one_out, df_feature_importance
     plot_roc_curve(logreg_test_preds, Y_TEST, "LogReg Testing ROC")
 
     # collect the result
+    create_confusion_matrix(Y_TEST, logreg_test_preds.round(), classifier_name, method_short_name)
+
     modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, logreg_test_preds)
-
-    create_confusion_matrix(Y_TEST, logreg_test_preds.round(), classifier_name)
-
     metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
     f1_score = modelMetricsKfold.f1_score()
     accuracy = modelMetricsKfold.accuracy()
 
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef, f1_score, accuracy, testset_size)
+    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef, f1_score, accuracy, time_elapsed, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
 
     fi_log_reg_kfold = pd.Series(logreg.coef_[0], index=X_TRAIN.columns)
@@ -399,10 +411,9 @@ def random_forest(df_result_kfold, df_leave_one_out, df_feature_importance):
     plot_prc_curve(rfc_test_preds, Y_TEST, "RFC Testing PRC")
     plot_roc_curve(rfc_test_preds, Y_TEST, "RFC Testing ROC")
 
-    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, rfc_test_preds)
-
     create_confusion_matrix(Y_TEST, rfc_test_preds.round(), classifier_name)
 
+    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, rfc_test_preds)
     metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
     f1_score = modelMetricsKfold.f1_score()
     accuracy = modelMetricsKfold.accuracy()
@@ -453,7 +464,7 @@ def random_forest(df_result_kfold, df_leave_one_out, df_feature_importance):
     modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, rfc_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
+    accuracy = modelMetricsLOO.accuracy()
 
     row_stats = create_result_output(classifier_name,method_name, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, testset_size)
     df_result_kfold = df_result_kfold.append(row_stats, ignore_index=True)
@@ -607,6 +618,7 @@ def xgboost(df_result_kfold, df_leave_one_out, df_feature_importance):
 
     # plot feature importance
     plot_importance(xgb_model)
+    plt.title(f"{classifier_name} - {method_name}")
     plt.show()
 
     series_features = pd.Series(xgb_model.feature_names, index=X_TRAIN.columns)
@@ -617,6 +629,8 @@ def xgboost(df_result_kfold, df_leave_one_out, df_feature_importance):
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
     # Leave one out
+    method_name = ValidationMethod.LOO.value
+    method_short_name = ValidationMethod.LOO.name
 
     xgb_loo, xgb_y_preds_loo, xgb_y_trues_loo = leave_one_out(xgb_train_func, xgb_pred_func)
     xgb_loo_test_preds = xgb_pred_func(xgb_loo, X_TEST)
@@ -632,10 +646,15 @@ def xgboost(df_result_kfold, df_leave_one_out, df_feature_importance):
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
 
+    # plot feature importance
+    plot_importance(xgb_loo)
+    plt.title(f"{classifier_name} - {method_name}")
+    plt.show()
+
     modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, xgb_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
+    accuracy = modelMetricsLOO.accuracy()
 
     row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
                                      f1_score,accuracy, testset_size)
@@ -669,6 +688,7 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
     logger.info(f"{classifier_name}...")
 
     method_name = ValidationMethod.KFold.value
+    method_short_name = ValidationMethod.KFold.name
     logger.info(f"{classifier_name} - {method_name}")
 
 
@@ -684,6 +704,8 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
 
 
     # collect the result
+    create_confusion_matrix(Y_TEST, gbm_test_preds.round(), classifier_name, method_short_name)
+
     modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, gbm_test_preds)
     metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
     f1_score = modelMetricsKfold.f1_score()
@@ -712,7 +734,8 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
     # Leave one out
-    method_name = ValidationMethod.LOO.name
+    method_name = ValidationMethod.LOO.value
+    method_short_name = ValidationMethod.LOO.name
     logger.info(f"{classifier_name} - {method_name}")
 
     lgbm_loo, lgbm_y_preds_loo, lgbm_y_trues_loo = leave_one_out(gbm_train_func, gbm_pred_func)
@@ -730,10 +753,11 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
 
+    create_confusion_matrix(Y_TEST, lgbm_loo_test_preds.round(), classifier_name, method_short_name)
     modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, lgbm_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
     f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
+    accuracy = modelMetricsLOO.accuracy()
 
     row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
                                      f1_score,accuracy, testset_size)
@@ -741,48 +765,6 @@ def light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance):
 
 
     return df_result_kfold, df_leave_one_out, df_feature_importance
-
-def testing(logReg):
-    predictionsTestSetLogisticRegression = pd.DataFrame(data=[], index=Y_TEST.index, columns=['prediction'])
-    predictionsTestSetLogisticRegression.loc[:, 'prediction'] = logReg.predict_proba(X_TEST)[:, 1]
-    logLossTestSetLogisticRegression = log_loss(Y_TEST, predictionsTestSetLogisticRegression)
-
-
-def hyper_tuning_random_forest():
-    # Create the parameter grid based on the results of random search
-    param_grid = {
-        'bootstrap': [True],
-        'max_depth': [80, 90, 100, 110],
-        'max_features': [2, 3],
-        'min_samples_leaf': [3, 4, 5],
-        'min_samples_split': [8, 10, 12],
-        'n_estimators': [100, 200, 300, 1000]
-    }
-    # Create a based model
-    rf = RandomForestClassifier()
-    # Instantiate the grid search model
-    grid_search = GridSearchCV(estimator=rf, param_grid=param_grid,
-                               cv=3, n_jobs=-1, verbose=2)
-
-    # Fit the grid search to the data
-    #X_TRAIN, X_TEST, Y_TRAIN, Y_TEST
-    grid_search.fit(X_TRAIN, Y_TRAIN)
-
-    print(grid_search.best_params_)
-
-def hyper_tuning(model, grid_params ):
-
-    cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
-    grid_search = GridSearchCV(estimator=model, param_grid=grid_params, n_jobs=-1, cv=cv, scoring='accuracy', error_score=0, verbose=2)
-    grid_result = grid_search.fit(X_TRAIN, Y_TRAIN)
-
-    # summarize results
-    print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
-    means = grid_result.cv_results_['mean_test_score']
-    stds = grid_result.cv_results_['std_test_score']
-    params = grid_result.cv_results_['params']
-    for mean, stdev, param in zip(means, stds, params):
-        print("%f (%f) with: %r" % (mean, stdev, param))
 
 
 def check_options(*options):
@@ -800,6 +782,14 @@ def check_options(*options):
         logger.error("Only one option must be chosen")
         exit()
 
+
+def save_dataframe(dataframe):
+    dataframe.to_pickle("data_frame_result.pkl")
+
+def load_dataframe():
+    output = pd.read_pickle("data_frame_result.pkl")
+    return output
+
 if __name__ == '__main__':
     logger = log_configuration.logger
     logger.info("Script started...")
@@ -810,8 +800,9 @@ if __name__ == '__main__':
     config_params['show_confusion_matrix'] = True
 
     run_hyper_tuning = False
-    run_models = True
-    check_options(run_hyper_tuning, run_models)
+    run_models = False
+    read_result_df_saved = True
+    check_options(run_hyper_tuning, run_models, read_result_df_saved)
 
     if run_hyper_tuning:
         #hyper_tuning(model, param_grid)
@@ -826,16 +817,29 @@ if __name__ == '__main__':
     if run_models:
 
         #df_result_kfold, df_leave_one_out, df_feature_importance = logistic_regression(df_result_kfold,  df_leave_one_out, df_feature_importance)
-        #df_result_kfold, df_leave_one_out, df_feature_importance = random_forest(df_result_kfold, df_leave_one_out,df_feature_importance)
+
         #df_result_kfold, df_leave_one_out, df_feature_importance = decision_tree(df_result_kfold, df_leave_one_out, df_feature_importance)
-        #df_result_kfold, df_leave_one_out, df_feature_importance = xgboost(df_result_kfold, df_leave_one_out, df_feature_importance)
-        df_result_kfold, df_leave_one_out, df_feature_importance = light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance)
+        #df_result_kfold, df_leave_one_out, df_feature_importance = random_forest(df_result_kfold, df_leave_one_out,df_feature_importance)
+
+        df_result_kfold, df_leave_one_out, df_feature_importance = xgboost(df_result_kfold, df_leave_one_out, df_feature_importance)
+        #df_result_kfold, df_leave_one_out, df_feature_importance = light_gbm(df_result_kfold, df_leave_one_out, df_feature_importance)
+
+        save_dataframe(df_result_kfold)
 
         try:
             results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.KFold.value, 'F1-Score')
             results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.LOO.value, 'F1-Score')
+
+            results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.KFold.value, 'Mattews Correlation Coef.')
+            results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.LOO.value, 'Mattews Correlation Coef.')
+
+            results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.KFold.value, 'Accuracy')
+            results_plot.create_plot_result_ml(df_result_kfold, ValidationMethod.LOO.value, 'Accuracy')
         except:
             print("Something went wrong. Maybe only one model was chosen")
+
+    if read_result_df_saved:
+        df_result_kfold = load_dataframe()
 
 
     print(df_result_kfold)
