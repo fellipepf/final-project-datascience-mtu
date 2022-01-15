@@ -5,13 +5,11 @@ import numpy as np
 import pandas as pd
 
 # cnn model
-from numpy import mean
-from numpy import std
 from numpy import dstack
-from matplotlib import pyplot
+
 
 from scipy import stats
-
+import tensorflow as tf
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Flatten
@@ -22,16 +20,20 @@ from keras.layers.convolutional import Conv2D
 from keras.layers.convolutional import MaxPooling1D
 #from keras.utils import to_categorical
 from keras.utils.np_utils import to_categorical
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import train_test_split
 from keras.callbacks import EarlyStopping
 
 from datetime import datetime
+from matplotlib import pyplot, pyplot as plt
 
 from tensorflow import keras
 
 import log_configuration
+import my_metrics
 from psykose import LoadDataset, PreProcessing, eda_baseline_date_range
 
+logger = log_configuration.logger
 
 #for each user
 def process_dataset(dataset):
@@ -77,9 +79,9 @@ def process_dataset(dataset):
 
 def create_time_window(df_dataset):
     logger = log_configuration.logger
-    logger.info("Create time window...")
+    logger.info("Creating time window...")
 
-    window_size = 300  # 50 records in each sequence
+    window_size = 380  # 50 records in each sequence
     N_FEATURES = 2  # activity and category
     step = 10  # window overlap = 50 -10 = 40  (80% overlap)
 
@@ -153,7 +155,7 @@ def evaluate_cnn_model(X_train, X_test, y_train, y_test):
     logger.info("CNN model running...")
 
     verbose = 1
-    epochs = 20
+    epochs = 30
     batch_size = 32
 
     sample =  X_train.shape[0]
@@ -179,12 +181,12 @@ def evaluate_cnn_model(X_train, X_test, y_train, y_test):
     return accuracy
 
 
-def evaluate_cnn_model_working(X_train, X_test, y_train, y_test):
+def run_cnn_model_working(X_train, X_test, y_train, y_test):
     logger = log_configuration.logger
     logger.info("CNN model running...")
 
     verbose = 1
-    epochs = 20
+    epochs = 30
     batch_size = 32
 
     #sample =  X_train.shape[0]
@@ -194,21 +196,60 @@ def evaluate_cnn_model_working(X_train, X_test, y_train, y_test):
 
     model = Sequential()
     model.add(Conv1D(filters=128, kernel_size=3, activation='relu', input_shape=( n_timesteps, n_features)))
-    model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
-    model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
-    model.add(Dropout(0.5))
+    #model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
     model.add(MaxPooling1D(pool_size=2))
+    model.add(Dropout(0.5))
+
+    model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
+    model.add(MaxPooling1D(pool_size=2))
+
+    model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
+    model.add(MaxPooling1D(pool_size=2))
+
     model.add(Flatten())
     model.add(Dense(100, activation='relu'))
+
     model.add(Dense(n_outputs, activation='softmax'))
+
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     model.summary()
-    # fit network
-    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=verbose)
-    # evaluate model
-    _, accuracy = model.evaluate(X_test, y_test, batch_size=batch_size, verbose=verbose)
-    return accuracy
 
+    # fit network
+    validation_data = (X_test, y_test)
+    history_fit = model.fit(X_train, y_train, validation_data =validation_data, epochs=epochs, batch_size=batch_size, verbose=verbose)
+
+    # evaluate model
+    _, test_accuracy = model.evaluate(X_test, y_test, batch_size=batch_size, verbose=verbose)
+    return history_fit, test_accuracy, model
+
+
+def result_plot(history):
+    print(history.history.keys())
+    # plot loss during training
+    pyplot.subplot(211)
+    pyplot.title('Loss')
+    pyplot.xlabel('Epochs')
+    pyplot.plot(history.history['loss'], label='train')
+    pyplot.plot(history.history['val_loss'], label='test')
+    pyplot.legend()
+    # plot accuracy during training
+    pyplot.subplot(212)
+    pyplot.title('Accuracy')
+    pyplot.xlabel('Epochs')
+    pyplot.plot(history.history['accuracy'], label='train')
+    pyplot.plot(history.history['val_accuracy'], label='test')
+    pyplot.legend()
+    pyplot.show()
+
+def create_confusion_matrix(y_true, y_preds, classifier_name=None, method_short_name=None):
+    cm = confusion_matrix(y_true, y_preds) #, normalize='all'
+    cmd = ConfusionMatrixDisplay(cm, display_labels=['healthy', 'patient'])
+    cmd = cmd.plot(cmap=plt.cm.Blues, values_format='g')
+    cmd.ax_.set_title(f'Confusion Matrix - {classifier_name} - {method_short_name}')
+    cmd.plot()
+    #cmd.ax_.set(xlabel='Predicted', ylabel='True')
+
+    plt.show()
 
 def check_options(*options):
     '''
@@ -226,7 +267,7 @@ def check_options(*options):
         exit()
 
 if __name__ == '__main__':
-    logger = log_configuration.logger
+
     logger.info("Script started...")
 
     dict_dataset = LoadDataset().get_dataset_joined()
@@ -234,7 +275,7 @@ if __name__ == '__main__':
     df_dataset = preProcessing.df_dataset_category
 
     use_k_fold_cross_validation = False
-    use_leave_one_out = True
+    use_leave_one_out = False
     use_traditional_split = True
 
     check_options(use_k_fold_cross_validation, use_leave_one_out, use_traditional_split)
@@ -249,12 +290,29 @@ if __name__ == '__main__':
     #evaluate_ltsm_model(X_train, X_test, y_train, y_test)
     #evaluate_cnn_model(X_train, X_test, y_train, y_test)
 
-    evaluate_cnn_model_working(X_train, X_test, y_train, y_test)
+    history_fit, test_accuracy, model = run_cnn_model_working(X_train, X_test, y_train, y_test)
 
     time_elapsed = datetime.now() - start_time
     print('Time elapsed (hh:mm:ss.ms) {}'.format(time_elapsed))
 
-    #range_info = eda_baseline_date_range(control)
+    result_plot(history_fit)
 
-    #print(range_info)
+    y_predicted = model.predict(X_test)
+    y_predicted_arg = np.argmax(y_predicted, axis=1)
+    y_test_arg = np.argmax(y_test, axis=1)
+
+    print(f"accuracy: {test_accuracy}" )
+
+
+
+    modelMetrics = my_metrics.ModelMetrics(y_test_arg, y_predicted_arg)
+    metric_mattews_coef = modelMetrics.matthews_corrcoef()
+    f1_score = modelMetrics.f1_score()
+    accuracy = modelMetrics.accuracy()
+
+    print(f" mcc: {metric_mattews_coef} - f1: {f1_score} - acc: {accuracy}")
+
+    create_confusion_matrix(y_test_arg, y_predicted_arg, "CNN", None)
+
+
 
