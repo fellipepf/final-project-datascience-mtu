@@ -302,12 +302,19 @@ def create_result_output(classifier_name, method, average_precision, auc_roc, me
     }
     return row_stats
 
-def collect_matrics(y_true, y_pred, classifier_name, method_short_name):
+def collect_matrics(y_true, y_pred, classifier_name, method_short_name, time_elapsed, testset_size):
 
     modelMetricsKfold = my_metrics.ModelMetrics(y_true, y_pred)
     metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
     f1_score = modelMetricsKfold.f1_score()
     accuracy = modelMetricsKfold.accuracy()
+
+    average_precision = modelMetricsKfold.average_precision_score()
+    auc_roc = modelMetricsKfold.auc_roc()
+
+    row_results = create_result_output(classifier_name, method_short_name, average_precision, auc_roc, metric_mattews_coef, f1_score, accuracy,
+                         time_elapsed, testset_size)
+    return row_results
 
 
 #Logistic Regression
@@ -340,8 +347,8 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
 
     # precision-recall curves (PRC)
     # Receiver-operator curves (ROC)
-    average_precision = plot_prc_curve(logreg_y_preds, logreg_y_trues, "LogReg Cross-Vaidation PRC")
-    auc_roc = plot_roc_curve(logreg_y_preds, logreg_y_trues, "LogReg Cross-Vaidation ROC")
+    plot_prc_curve(logreg_y_preds, logreg_y_trues, "LogReg Cross-Vaidation PRC")
+    plot_roc_curve(logreg_y_preds, logreg_y_trues, "LogReg Cross-Vaidation ROC")
 
     plot_prc_curve(logreg_test_preds, Y_TEST, "LogReg Testing PRC")
     plot_roc_curve(logreg_test_preds, Y_TEST, "LogReg Testing ROC")
@@ -349,13 +356,9 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
     # collect the result
     create_confusion_matrix(Y_TEST, logreg_test_preds.round(), classifier_name, method_short_name)
 
-    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, logreg_test_preds)
-    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
-    f1_score = modelMetricsKfold.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
+    metrics_logreg_kfold = collect_matrics(Y_TEST, logreg_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
 
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef, f1_score, accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
+    df_result_metrics = df_result_metrics.append(metrics_logreg_kfold, ignore_index=True)
 
     fi_log_reg_kfold = pd.Series(logreg.coef_[0], index=X_TRAIN.columns)
     plot_feature_importance(fi_log_reg_kfold, classifier_name, method_short_name)
@@ -392,15 +395,10 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
     fi_log_reg_loo = pd.Series(logreg_loo.coef_[0], index=X_TRAIN.columns)
     plot_feature_importance(fi_log_reg_loo, classifier_name, method_short_name)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, logreg_loo_test_preds)
-    metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
-    f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsLOO.accuracy()
+    metrics_logreg_loo = collect_matrics(Y_TEST, logreg_loo_test_preds, classifier_name, method_short_name, time_elapsed,
+                                           testset_size)
 
-    row_stats = create_result_output(classifier_name,method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
-
-
+    df_result_metrics = df_result_metrics.append(metrics_logreg_loo, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
 
@@ -427,22 +425,18 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
     rfc_test_preds = rfc_pred_func(rfc, X_TEST)
 
 
-    average_precision = plot_prc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Validation PRC")
-    auc_roc = plot_roc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Vaidation ROC")
+    plot_prc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Validation PRC")
+    plot_roc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Vaidation ROC")
 
     plot_prc_curve(rfc_test_preds, Y_TEST, "RFC Testing PRC")
     plot_roc_curve(rfc_test_preds, Y_TEST, "RFC Testing ROC")
 
     create_confusion_matrix(Y_TEST, rfc_test_preds.round(), classifier_name, method_short_name)
 
-    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, rfc_test_preds)
-    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
-    f1_score = modelMetricsKfold.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
-
     # collect the result
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
+    metrics_rf_kfold = collect_matrics(Y_TEST, rfc_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+
+    df_result_metrics = df_result_metrics.append(metrics_rf_kfold, ignore_index=True)
 
     # get importance
     importance = rfc.feature_importances_
@@ -484,13 +478,9 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
 
     create_confusion_matrix(Y_TEST, rfc_loo_test_preds.round(), classifier_name, method_short_name)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, rfc_loo_test_preds)
-    metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
-    f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsLOO.accuracy()
+    metrics_rf_loo = collect_matrics(Y_TEST, rfc_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
 
-    row_stats = create_result_output(classifier_name,method_name, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
+    df_result_metrics = df_result_metrics.append(metrics_rf_loo, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
 
@@ -513,30 +503,22 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
     method_short_name = ValidationMethod.KFold.name
     logger.info(f"{classifier_name} - {method_name}")
 
-
     dtc = DecisionTreeClassifier(**_PARAMS_DTC)
 
     dtc, dtc_y_preds, dtc_y_trues, time_elapsed = model_predict_k_fold(dtc_train_func, dtc_pred_func, dtc)
     dtc_test_preds = dtc_pred_func(dtc, X_TEST)
 
-
-
     plot_prc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation PRC")
     plot_roc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation ROC")
 
-    average_precision = plot_prc_curve(dtc_test_preds, Y_TEST, "RFC Testing PRC")
-    auc_roc = plot_roc_curve(dtc_test_preds, Y_TEST, "RFC Testing ROC")
+    plot_prc_curve(dtc_test_preds, Y_TEST, "RFC Testing PRC")
+    plot_roc_curve(dtc_test_preds, Y_TEST, "RFC Testing ROC")
 
     create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
 
     # collect the result
-    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, dtc_test_preds)
-    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
-    f1_score = modelMetricsKfold.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
-
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
+    metrics_dt_kfold = collect_matrics(Y_TEST, dtc_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    df_result_metrics = df_result_metrics.append(metrics_dt_kfold, ignore_index=True)
 
     # get importance
     importance = dtc.feature_importances_
@@ -581,15 +563,8 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
 
     create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, dtc_loo_test_preds)
-    metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
-    f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsLOO.accuracy()
-
-
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
-                                     f1_score, accuracy,time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
+    metrics_dt_loo = collect_matrics(Y_TEST, dtc_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    df_result_metrics = df_result_metrics.append(metrics_dt_loo, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
 
@@ -621,6 +596,7 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
     logger.info(f"{classifier_name}...")
 
     method_name = ValidationMethod.KFold.value
+    method_short_name = ValidationMethod.KFold.name
     logger.info(f"{classifier_name} - {method_name}")
 
 
@@ -628,21 +604,17 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
     xgb_model, xgb_y_preds, xgb_y_trues, time_elapsed = model_predict_k_fold(xgb_train_func, xgb_pred_func)
     xgb_test_preds = xgb_pred_func(xgb_model, X_TEST)
 
-    average_precision = plot_prc_curve(xgb_y_preds, xgb_y_trues, "XGB Cross-Vaidation PRC")
-    auc_roc = plot_roc_curve(xgb_y_preds, xgb_y_trues, "XGB Cross-Vaidation ROC")
+    plot_prc_curve(xgb_y_preds, xgb_y_trues, "XGB Cross-Vaidation PRC")
+    plot_roc_curve(xgb_y_preds, xgb_y_trues, "XGB Cross-Vaidation ROC")
 
     plot_prc_curve(xgb_test_preds, Y_TEST, "XGB Testing PRC")
     plot_roc_curve(xgb_test_preds, Y_TEST, "XGB Testing ROC")
 
 
     #kfold
-    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, xgb_test_preds)
-    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
-    f1_score = modelMetricsKfold.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
+    metrics_xgb_kfold = collect_matrics(Y_TEST, xgb_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
 
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score, accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
+    df_result_metrics = df_result_metrics.append(metrics_xgb_kfold, ignore_index=True)
 
     # plot feature importance
     title = f"Feature Importance - {classifier_name} - {method_name}"
@@ -680,15 +652,8 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
     plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, xgb_loo_test_preds)
-    metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
-    f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsLOO.accuracy()
-
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
-                                     f1_score,accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
-
+    metrics_xgb_loo = collect_matrics(Y_TEST, xgb_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    df_result_metrics = df_result_metrics.append(metrics_xgb_loo, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
 
@@ -724,8 +689,8 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     gbm, gbm_y_preds, gbm_y_trues, time_elapsed = model_predict_k_fold(gbm_train_func, gbm_pred_func)
     gbm_test_preds = gbm_pred_func(gbm, X_TEST)
 
-    average_precision = plot_prc_curve(gbm_y_preds, gbm_y_trues, "GBM Cross-Vaidation PRC")
-    auc_roc = plot_roc_curve(gbm_y_preds, gbm_y_trues, "GBM Cross-Vaidation ROC")
+    plot_prc_curve(gbm_y_preds, gbm_y_trues, "GBM Cross-Vaidation PRC")
+    plot_roc_curve(gbm_y_preds, gbm_y_trues, "GBM Cross-Vaidation ROC")
 
     plot_prc_curve(gbm_test_preds, Y_TEST, "GBM Testing PRC")
     plot_roc_curve(gbm_test_preds, Y_TEST, "GBM Testing ROC")
@@ -734,15 +699,9 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     # collect the result
     create_confusion_matrix(Y_TEST, gbm_test_preds.round(), classifier_name, method_short_name)
 
-    modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, gbm_test_preds)
-    metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
-    f1_score = modelMetricsKfold.f1_score()
-    accuracy = modelMetricsKfold.accuracy()
+    metrics_lgbm_kfold = collect_matrics(Y_TEST, gbm_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    df_result_metrics = df_result_metrics.append(metrics_lgbm_kfold, ignore_index=True)
 
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,f1_score,accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
-
-    print('Plotting feature importances...')
     title = f"Feature Importance - {classifier_name} - {method_name}"
     ax = lgb.plot_importance(gbm, title=title) #, max_num_features=10
     #plt.title(f"Feature Importance - {classifier_name} - {method_name}")
@@ -791,15 +750,8 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     #plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
-    modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, lgbm_loo_test_preds)
-    metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
-    f1_score = modelMetricsLOO.f1_score()
-    accuracy = modelMetricsLOO.accuracy()
-
-    row_stats = create_result_output(classifier_name, method_name, average_precision, auc_roc, metric_mattews_coef,
-                                     f1_score,accuracy, time_elapsed, testset_size)
-    df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
-
+    metrics_lgbm_kfold = collect_matrics(Y_TEST, lgbm_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    df_result_metrics = df_result_metrics.append(metrics_lgbm_kfold, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
 
@@ -848,8 +800,8 @@ if __name__ == '__main__':
     config_params['show_roc'] = True
 
     run_hyper_tuning = False
-    run_models = False
-    read_result_df_saved = True
+    run_models = True
+    read_result_df_saved = False
     check_options(run_hyper_tuning, run_models, read_result_df_saved)
 
     if run_hyper_tuning:

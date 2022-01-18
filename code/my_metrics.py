@@ -16,6 +16,10 @@ class ModelMetrics:
         return precision_score(self.y_true, self.y_preds, average=None)
 
     def average_precision_score(self):
+        '''
+        This metric is used in the paper for Experiment I
+        :return:
+        '''
         return metrics.average_precision_score(self.y_true, self.y_preds)
 
     def recall(self):
@@ -31,7 +35,11 @@ class ModelMetrics:
         return classification_report(self.y_true, self.y_preds)
 
     def auc_roc(self):
-        fpr, tpr, _ = metrics.roc_curve(self.y_true, self.y_preds)
+        '''
+        This metric is used in the paper for Experiment I
+        :return:
+        '''
+        fpr, tpr, thresholds = metrics.roc_curve(self.y_true, self.y_preds)
         return metrics.auc(fpr, tpr)
 
     def matthews_corrcoef(self, round=None):
