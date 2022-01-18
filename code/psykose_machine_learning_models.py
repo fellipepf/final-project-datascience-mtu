@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pprint
 from tabulate import tabulate
-from IPython.display import display, HTML
 import dataframe_image as dfi
 
 from sklearn import preprocessing as pp
@@ -42,15 +41,21 @@ import utils
 from utils import get_name_from_value
 from utils import Target
 
-# PATH_TO_FILE = "../../psykose/schizophrenia-features.csv"
+LOGGER = log_configuration.logger
+
+
+# provided baseline dataset
+#PATH_TO_FILE = "../psykose/schizophrenia-features.csv"
 
 
 # baseline dataset with new features
-#PATH_TO_FILE = "baseline_time_period.csv"
+PATH_TO_FILE = "baseline_time_period.csv"
 
 # baseline dataset with features defined on published paper
-# generated in this research
-PATH_TO_FILE = "my_baseline.csv"
+# reproduced in this research
+#PATH_TO_FILE = "my_baseline.csv"
+
+LOGGER.info(f"Dataset selected: {PATH_TO_FILE}")
 
 
 _PARAMS_LORGREG = {
@@ -131,7 +136,7 @@ scaler = pp.StandardScaler(copy=True)
 dataX.loc[:, dataX.columns] = scaler.fit_transform(dataX[dataX.columns])
 
 
-testset_size = 0.2
+testset_size = 0.33
 
 X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
     dataX,
@@ -459,7 +464,7 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
 
     rfc_loo = RandomForestClassifier(**_PARAMS_RFC)
     rfc_loo, rfc_y_preds_loo, rfc_y_trues_loo, time_elapsed = leave_one_out(rfc_train_func, rfc_pred_func, rfc_loo)
-    rfc_loo_test_preds = logreg_pred_func(rfc_loo, X_TEST)
+    rfc_loo_test_preds = rfc_pred_func(rfc_loo, X_TEST)
 
     print(classification_report(Y_TEST, rfc_loo_test_preds.round()))
 
@@ -477,6 +482,7 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
     fi_r_forest_kfold = pd.Series(importance, index=X_TRAIN.columns)
     plot_feature_importance(fi_r_forest_kfold, classifier_name, method_name)
 
+    create_confusion_matrix(Y_TEST, rfc_loo_test_preds.round(), classifier_name, method_short_name)
 
     modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, rfc_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
@@ -521,6 +527,8 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
     average_precision = plot_prc_curve(dtc_test_preds, Y_TEST, "RFC Testing PRC")
     auc_roc = plot_roc_curve(dtc_test_preds, Y_TEST, "RFC Testing ROC")
 
+    create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
+
     # collect the result
     modelMetricsKfold = my_metrics.ModelMetrics(Y_TEST, dtc_test_preds)
     metric_mattews_coef = modelMetricsKfold.matthews_corrcoef()
@@ -550,7 +558,7 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
 
     dtc_loo = DecisionTreeClassifier(**_PARAMS_DTC)
     dtc_loo, dtc_y_preds_loo, dtc_y_trues_loo, time_elapsed = leave_one_out(dtc_train_func, dtc_pred_func, dtc_loo)
-    dtc_loo_test_preds = logreg_pred_func(dtc_loo, X_TEST)
+    dtc_loo_test_preds = dtc_pred_func(dtc_loo, X_TEST)
 
     print(classification_report(Y_TEST, dtc_loo_test_preds.round()))
 
@@ -570,6 +578,8 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
 
             # collect the result for leave one out
             df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
+
+    create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
 
     modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, dtc_loo_test_preds)
     metric_mattews_coef = modelMetricsLOO.matthews_corrcoef()
@@ -635,8 +645,9 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
     df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
 
     # plot feature importance
-    plot_importance(xgb_model)
-    plt.title(f"Feature Importance - {classifier_name} - {method_name}")
+    title = f"Feature Importance - {classifier_name} - {method_name}"
+    plot_importance(xgb_model, title=title)
+    #plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
     series_features = pd.Series(xgb_model.feature_names, index=X_TRAIN.columns)
@@ -732,8 +743,9 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     df_result_metrics = df_result_metrics.append(row_stats, ignore_index=True)
 
     print('Plotting feature importances...')
-    ax = lgb.plot_importance(gbm) #, max_num_features=10
-    plt.title(f"Feature Importance - {classifier_name} - {method_name}")
+    title = f"Feature Importance - {classifier_name} - {method_name}"
+    ax = lgb.plot_importance(gbm, title=title) #, max_num_features=10
+    #plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
     df_feature_importance_2 = (
@@ -774,8 +786,9 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     create_confusion_matrix(Y_TEST, lgbm_loo_test_preds.round(), classifier_name, method_short_name)
 
     print('Plotting feature importances...')
-    ax = lgb.plot_importance(lgbm_loo) #, max_num_features=10
-    plt.title(f"Feature Importance - {classifier_name} - {method_name}")
+    title = (f"Feature Importance - {classifier_name} - {method_name}")
+    ax = lgb.plot_importance(lgbm_loo, title=title) #, max_num_features=10
+    #plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
     modelMetricsLOO = my_metrics.ModelMetrics(Y_TEST, lgbm_loo_test_preds)
@@ -809,17 +822,17 @@ def check_options(*options):
 
 def save_dataframe(dataframe, name=None):
     if name:
-        file_name = f"df_result_{name}.pkl"
+        file_name = f"df_results/df_result_{name}.pkl"
     else:
-        file_name = "/df_results/df_result.pkl"
+        file_name = "df_results/df_result.pkl"
 
     dataframe.to_pickle(file_name)
 
 def load_dataframe(name=None):
     if name:
-        file_name = f"df_result_{name}.pkl"
+        file_name = f"df_results/df_result_{name}.pkl"
     else:
-        file_name = "df_result.pkl"
+        file_name = "df_results/df_result.pkl"
 
     output = pd.read_pickle(file_name)
     return output
@@ -850,6 +863,13 @@ if __name__ == '__main__':
     df_feature_importance = pd.DataFrame()
     df_leave_one_out = pd.DataFrame()
 
+    # DF saved files names
+    #result_filename = "all_classifiers_provided_paper_features"
+    result_filename = "all_classifiers_new_features"
+    #result_filename = "all_classifiers_reproduced_paper_features"
+    #result_filename = "single_classifier"
+
+
     if run_models:
         logger.info("Run models...")
         df_result_metrics, df_leave_one_out, df_feature_importance = logistic_regression(df_result_metrics,  df_leave_one_out, df_feature_importance)
@@ -860,10 +880,8 @@ if __name__ == '__main__':
         df_result_metrics, df_leave_one_out, df_feature_importance = xgboost(df_result_metrics, df_leave_one_out, df_feature_importance)
         df_result_metrics, df_leave_one_out, df_feature_importance = light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance)
 
-        #DF saved files names
-        #all_classifiers
-        #all_classifiers_paper_features
-        save_dataframe(df_result_metrics,"all_classifiers")
+
+        save_dataframe(df_result_metrics, result_filename)
 
         try:
             results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'F1-Score')
@@ -878,7 +896,7 @@ if __name__ == '__main__':
             print("Something went wrong. Maybe only one model was chosen")
 
     if read_result_df_saved:
-        df_result_metrics = load_dataframe("all_classifiers")
+        df_result_metrics = load_dataframe(result_filename)
 
 
     #results_plot.create_plot_result_training_time(df_result_metrics)
@@ -887,7 +905,12 @@ if __name__ == '__main__':
     print(tabulate(df_leave_one_out, headers='keys', tablefmt='psql'))
     print(tabulate(df_feature_importance, headers='keys', tablefmt='psql'))
 
+    report_outputs = True
+    if report_outputs:
+        #export result as table image
+        results_plot.create_table_result(df_result_metrics, 'K-Fold Cross-Validation', testset_size, result_filename)
+        results_plot.create_table_result(df_result_metrics, 'Leave-One-Out', testset_size, result_filename)
 
-    #export result as table image
-    results_plot.create_table_result(df_result_metrics, 'K-Fold Cross-Validation', testset_size)
-    results_plot.create_table_result(df_result_metrics, 'Leave-One-Out', testset_size)
+        #time
+        results_plot.create_table_result_time_exec(df_result_metrics, 'Leave-One-Out', result_filename)
+        results_plot.create_table_result_time_exec(df_result_metrics, 'K-Fold Cross-Validation', result_filename)
