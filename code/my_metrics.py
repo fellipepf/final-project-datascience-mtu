@@ -13,7 +13,7 @@ class ModelMetrics:
         return accuracy_score(self.y_true, self.y_preds.round())
 
     def precision(self):
-        return precision_score(self.y_true, self.y_preds, average=None)
+        return precision_score(self.y_true, self.y_preds.round(), average=None)
 
     def average_precision_score(self):
         '''
@@ -23,16 +23,16 @@ class ModelMetrics:
         return metrics.average_precision_score(self.y_true, self.y_preds)
 
     def recall(self):
-        return recall_score(self.y_true, self.y_preds)
+        return recall_score(self.y_true, self.y_preds.round())
 
     def f1_score(self):
         return f1_score(self.y_true, self.y_preds.round())
 
     def precision_recall_fscore_support(self):
-        return precision_recall_fscore_support(self.y_true, self.y_preds)
+        return precision_recall_fscore_support(self.y_true, self.y_preds.round())
 
     def classification_report(self):
-        return classification_report(self.y_true, self.y_preds)
+        return classification_report(self.y_true, self.y_preds.round())
 
     def auc_roc(self):
         '''

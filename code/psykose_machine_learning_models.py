@@ -49,11 +49,11 @@ LOGGER = log_configuration.logger
 
 
 # baseline dataset with new features
-PATH_TO_FILE = "baseline_time_period.csv"
+#PATH_TO_FILE = "baseline_time_period.csv"
 
 # baseline dataset with features defined on published paper
 # reproduced in this research
-#PATH_TO_FILE = "my_baseline.csv"
+PATH_TO_FILE = "my_baseline.csv"
 
 LOGGER.info(f"Dataset selected: {PATH_TO_FILE}")
 
@@ -159,8 +159,8 @@ def plot_prc_curve(y_preds, y_trues, title=None):
     )
     #clear plots from last use
     plt.close()
-    print("Average Precision = %.2f" % average_precision)
 
+    print("Average Precision = %.2f" % average_precision)
     plt.step(recall, precision, color="k", alpha=0.7, where="post")
     plt.fill_between(recall, precision, step="post", alpha=0.3, color="k")
 
@@ -168,12 +168,10 @@ def plot_prc_curve(y_preds, y_trues, title=None):
         title = "PRC: Average Precision = %.2f" % average_precision
 
     plt.title(title)
-
     plt.xlabel("Recall")
     plt.ylabel("Precision")
     plt.ylim([0.0, 1.05])
     plt.xlim([0.0, 1.0])
-
     plt.show()
 
     return average_precision
@@ -181,7 +179,6 @@ def plot_prc_curve(y_preds, y_trues, title=None):
 
 def plot_roc_curve(y_preds, y_trues, title=None):
     fpr, tpr, _ = metrics.roc_curve(y_trues, y_preds)
-
     auc_roc = metrics.auc(fpr, tpr)
 
     print("AUCROC = %.2f" % auc_roc)
@@ -193,19 +190,24 @@ def plot_roc_curve(y_preds, y_trues, title=None):
     plt.close()
 
     plt.title(title)
-
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
     plt.xlabel("FPR")
     plt.ylabel("TPR")
-
     plt.plot(fpr, tpr, color="r", lw=2, label="ROC curve")
     plt.plot([0, 1], [0, 1], color="k", lw=2, linestyle="--")
-
     plt.show()
 
     return auc_roc
 
+def plot_traning_curves(rfc_y_preds, rfc_y_trues):
+    plot_prc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Validation PRC")
+    plot_roc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Validation ROC")
+
+
+def plot_testing_curves(rfc_test_preds, Y_TEST):
+    plot_prc_curve(rfc_test_preds, Y_TEST, "RFC Testing PRC")
+    plot_roc_curve(rfc_test_preds, Y_TEST, "RFC Testing ROC")
 
 def model_predict_k_fold(train_func, pred_func, model=None, n_splits=10, shuffle=True, random_state=2018):
     y_preds = []
@@ -335,7 +337,6 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
 
     logger.info(f"{classifier_name} - {method_name}")
 
-
     #kfold
 
     logreg = LogisticRegression(**_PARAMS_LORGREG)
@@ -356,8 +357,7 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
     # collect the result
     create_confusion_matrix(Y_TEST, logreg_test_preds.round(), classifier_name, method_short_name)
 
-    metrics_logreg_kfold = collect_matrics(Y_TEST, logreg_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
-
+    metrics_logreg_kfold = collect_matrics(Y_TEST, logreg_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_logreg_kfold, ignore_index=True)
 
     fi_log_reg_kfold = pd.Series(logreg.coef_[0], index=X_TRAIN.columns)
@@ -395,9 +395,7 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
     fi_log_reg_loo = pd.Series(logreg_loo.coef_[0], index=X_TRAIN.columns)
     plot_feature_importance(fi_log_reg_loo, classifier_name, method_short_name)
 
-    metrics_logreg_loo = collect_matrics(Y_TEST, logreg_loo_test_preds, classifier_name, method_short_name, time_elapsed,
-                                           testset_size)
-
+    metrics_logreg_loo = collect_matrics(Y_TEST, logreg_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_logreg_loo, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
@@ -431,10 +429,13 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
     plot_prc_curve(rfc_test_preds, Y_TEST, "RFC Testing PRC")
     plot_roc_curve(rfc_test_preds, Y_TEST, "RFC Testing ROC")
 
+    plot_traning_curves(rfc_y_preds, rfc_y_trues)
+    plot_testing_curves(rfc_test_preds, Y_TEST)
+
     create_confusion_matrix(Y_TEST, rfc_test_preds.round(), classifier_name, method_short_name)
 
     # collect the result
-    metrics_rf_kfold = collect_matrics(Y_TEST, rfc_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_rf_kfold = collect_matrics(Y_TEST, rfc_test_preds, classifier_name, method_name, time_elapsed, testset_size)
 
     df_result_metrics = df_result_metrics.append(metrics_rf_kfold, ignore_index=True)
 
@@ -478,7 +479,7 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
 
     create_confusion_matrix(Y_TEST, rfc_loo_test_preds.round(), classifier_name, method_short_name)
 
-    metrics_rf_loo = collect_matrics(Y_TEST, rfc_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_rf_loo = collect_matrics(Y_TEST, rfc_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
 
     df_result_metrics = df_result_metrics.append(metrics_rf_loo, ignore_index=True)
 
@@ -517,7 +518,7 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
     create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
 
     # collect the result
-    metrics_dt_kfold = collect_matrics(Y_TEST, dtc_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_dt_kfold = collect_matrics(Y_TEST, dtc_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_dt_kfold, ignore_index=True)
 
     # get importance
@@ -563,7 +564,7 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
 
     create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
 
-    metrics_dt_loo = collect_matrics(Y_TEST, dtc_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_dt_loo = collect_matrics(Y_TEST, dtc_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_dt_loo, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
@@ -612,7 +613,7 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
 
 
     #kfold
-    metrics_xgb_kfold = collect_matrics(Y_TEST, xgb_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_xgb_kfold = collect_matrics(Y_TEST, xgb_test_preds, classifier_name, method_name, time_elapsed, testset_size)
 
     df_result_metrics = df_result_metrics.append(metrics_xgb_kfold, ignore_index=True)
 
@@ -652,7 +653,7 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
     plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
-    metrics_xgb_loo = collect_matrics(Y_TEST, xgb_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_xgb_loo = collect_matrics(Y_TEST, xgb_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_xgb_loo, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
@@ -699,7 +700,7 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     # collect the result
     create_confusion_matrix(Y_TEST, gbm_test_preds.round(), classifier_name, method_short_name)
 
-    metrics_lgbm_kfold = collect_matrics(Y_TEST, gbm_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_lgbm_kfold = collect_matrics(Y_TEST, gbm_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_lgbm_kfold, ignore_index=True)
 
     title = f"Feature Importance - {classifier_name} - {method_name}"
@@ -750,7 +751,7 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     #plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
-    metrics_lgbm_kfold = collect_matrics(Y_TEST, lgbm_loo_test_preds, classifier_name, method_short_name, time_elapsed, testset_size)
+    metrics_lgbm_kfold = collect_matrics(Y_TEST, lgbm_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_lgbm_kfold, ignore_index=True)
 
     return df_result_metrics, df_leave_one_out, df_feature_importance
@@ -800,8 +801,8 @@ if __name__ == '__main__':
     config_params['show_roc'] = True
 
     run_hyper_tuning = False
-    run_models = True
-    read_result_df_saved = False
+    run_models = False
+    read_result_df_saved = True
     check_options(run_hyper_tuning, run_models, read_result_df_saved)
 
     if run_hyper_tuning:
@@ -815,10 +816,11 @@ if __name__ == '__main__':
     df_feature_importance = pd.DataFrame()
     df_leave_one_out = pd.DataFrame()
 
+    #todo create class to manage the changing between the datasets and file names below
     # DF saved files names
     #result_filename = "all_classifiers_provided_paper_features"
-    result_filename = "all_classifiers_new_features"
-    #result_filename = "all_classifiers_reproduced_paper_features"
+    #result_filename = "all_classifiers_new_features"
+    result_filename = "all_classifiers_reproduced_paper_features"
     #result_filename = "single_classifier"
 
 
@@ -860,8 +862,8 @@ if __name__ == '__main__':
     report_outputs = True
     if report_outputs:
         #export result as table image
-        results_plot.create_table_result(df_result_metrics, 'K-Fold Cross-Validation', testset_size, result_filename)
-        results_plot.create_table_result(df_result_metrics, 'Leave-One-Out', testset_size, result_filename)
+        results_plot.create_table_result(df_result_metrics, ValidationMethod.KFold.value, testset_size, result_filename)
+        results_plot.create_table_result(df_result_metrics, ValidationMethod.LOO.value, testset_size, result_filename)
 
         #time
         results_plot.create_table_result_time_exec(df_result_metrics, 'Leave-One-Out', result_filename)
