@@ -49,11 +49,11 @@ LOGGER = log_configuration.logger
 
 
 # baseline dataset with new features
-#PATH_TO_FILE = "baseline_time_period.csv"
+PATH_TO_FILE = "baseline_time_period.csv"
 
 # baseline dataset with features defined on published paper
 # reproduced in this research
-PATH_TO_FILE = "my_baseline.csv"
+#PATH_TO_FILE = "my_baseline.csv"
 
 LOGGER.info(f"Dataset selected: {PATH_TO_FILE}")
 
@@ -327,7 +327,7 @@ def logreg_train_func(model, x_train, y_train, x_test, y_test):
 def logreg_pred_func(model, data):
     return model.predict_proba(data)[:, 1]
 
-def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importance):
+def logistic_regression(df_result_metrics, df_classification_report_loo, df_feature_importance):
     classifier_name = Classifier.log_reg.value
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
@@ -390,7 +390,7 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
             row_loo.update(value)
 
             # collect the result for leave one out
-            df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
+            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
 
     fi_log_reg_loo = pd.Series(logreg_loo.coef_[0], index=X_TRAIN.columns)
     plot_feature_importance(fi_log_reg_loo, classifier_name, method_short_name)
@@ -398,7 +398,7 @@ def logistic_regression(df_result_metrics, df_leave_one_out, df_feature_importan
     metrics_logreg_loo = collect_matrics(Y_TEST, logreg_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_logreg_loo, ignore_index=True)
 
-    return df_result_metrics, df_leave_one_out, df_feature_importance
+    return df_result_metrics, df_classification_report_loo, df_feature_importance
 
 # Random Forest
 def rfc_train_func(model, x_train, y_train, x_test, y_test):
@@ -408,7 +408,7 @@ def rfc_train_func(model, x_train, y_train, x_test, y_test):
 def rfc_pred_func(model, data):
     return model.predict_proba(data)[:, 1]
 
-def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
+def random_forest(df_result_metrics, df_classification_report_loo, df_feature_importance):
     classifier_name = Classifier.r_forest.value
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
@@ -471,7 +471,7 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
             row_loo.update(value)
 
             # collect the result for leave one out
-            df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
+            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
 
     importance = rfc_loo.feature_importances_
     fi_r_forest_kfold = pd.Series(importance, index=X_TRAIN.columns)
@@ -483,7 +483,7 @@ def random_forest(df_result_metrics, df_leave_one_out, df_feature_importance):
 
     df_result_metrics = df_result_metrics.append(metrics_rf_loo, ignore_index=True)
 
-    return df_result_metrics, df_leave_one_out, df_feature_importance
+    return df_result_metrics, df_classification_report_loo, df_feature_importance
 
 #Decision Tree
 
@@ -495,7 +495,7 @@ def dtc_train_func(model, x_train, y_train, x_test, y_test):
 def dtc_pred_func(model, data):
     return model.predict_proba(data)[:, 1]
 
-def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
+def decision_tree(df_result_metrics, df_classification_report_loo, df_feature_importance):
     classifier_name = Classifier.d_tree.value
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
@@ -560,14 +560,14 @@ def decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance):
             row_loo.update(value)
 
             # collect the result for leave one out
-            df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
+            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
 
     create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
 
     metrics_dt_loo = collect_matrics(Y_TEST, dtc_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_dt_loo, ignore_index=True)
 
-    return df_result_metrics, df_leave_one_out, df_feature_importance
+    return df_result_metrics, df_classification_report_loo, df_feature_importance
 
 
 #XGBoost
@@ -591,7 +591,7 @@ def xgb_pred_func(model, data):
     pred = model.predict(data)
     return pred
 
-def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
+def xgboost(df_result_metrics, df_classification_report_loo, df_feature_importance):
     classifier_name = Classifier.xgb.value
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
@@ -646,7 +646,7 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
             row_loo.update(value)
 
             # collect the result for leave one out
-            df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
+            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
 
     # plot feature importance
     plot_importance(xgb_loo)
@@ -656,7 +656,7 @@ def xgboost(df_result_metrics, df_leave_one_out, df_feature_importance):
     metrics_xgb_loo = collect_matrics(Y_TEST, xgb_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_xgb_loo, ignore_index=True)
 
-    return df_result_metrics, df_leave_one_out, df_feature_importance
+    return df_result_metrics, df_classification_report_loo, df_feature_importance
 
 #LightGBM
 def gbm_train_func(model, x_train, y_train, x_test, y_test):
@@ -677,7 +677,7 @@ def gbm_train_func(model, x_train, y_train, x_test, y_test):
 def gbm_pred_func(model, data):
     return model.predict(data, num_iteration=model.best_iteration)
 
-def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
+def light_gbm(df_result_metrics, df_classification_report_loo, df_feature_importance):
     classifier_name = Classifier.lgbm.value
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
@@ -741,7 +741,7 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
             row_loo.update(value)
 
             # collect the result for leave one out
-            df_leave_one_out = df_leave_one_out.append(row_loo, ignore_index=True)
+            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
 
     create_confusion_matrix(Y_TEST, lgbm_loo_test_preds.round(), classifier_name, method_short_name)
 
@@ -754,7 +754,7 @@ def light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance):
     metrics_lgbm_kfold = collect_matrics(Y_TEST, lgbm_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_lgbm_kfold, ignore_index=True)
 
-    return df_result_metrics, df_leave_one_out, df_feature_importance
+    return df_result_metrics, df_classification_report_loo, df_feature_importance
 
 
 def check_options(*options):
@@ -814,56 +814,79 @@ if __name__ == '__main__':
     # Data Frame to collect all results of the classifiers
     df_result_metrics = pd.DataFrame()
     df_feature_importance = pd.DataFrame()
-    df_leave_one_out = pd.DataFrame()
+    df_classification_report_loo = pd.DataFrame()  #todo a refactor on the code that collects this info
 
     #todo create class to manage the changing between the datasets and file names below
     # DF saved files names
     #result_filename = "all_classifiers_provided_paper_features"
-    #result_filename = "all_classifiers_new_features"
-    result_filename = "all_classifiers_reproduced_paper_features"
+    result_filename = "all_classifiers_new_features"
+    #result_filename = "all_classifiers_reproduced_paper_features"
     #result_filename = "single_classifier"
 
+    #file names for classification report for LOO
+    result_file_class_report_loo = "class_report_all_classifiers_new_features"
+    #result_file_class_report_loo = "class_report_all_classifiers_reproduced_features"
 
     if run_models:
         logger.info("Run models...")
-        df_result_metrics, df_leave_one_out, df_feature_importance = logistic_regression(df_result_metrics,  df_leave_one_out, df_feature_importance)
+        df_result_metrics, df_classification_report_loo, df_feature_importance = logistic_regression(df_result_metrics,  df_classification_report_loo, df_feature_importance)
 
-        df_result_metrics, df_leave_one_out, df_feature_importance = decision_tree(df_result_metrics, df_leave_one_out, df_feature_importance)
-        df_result_metrics, df_leave_one_out, df_feature_importance = random_forest(df_result_metrics, df_leave_one_out,df_feature_importance)
+        df_result_metrics, df_classification_report_loo, df_feature_importance = decision_tree(df_result_metrics, df_classification_report_loo, df_feature_importance)
+        df_result_metrics, df_classification_report_loo, df_feature_importance = random_forest(df_result_metrics, df_classification_report_loo,df_feature_importance)
 
-        df_result_metrics, df_leave_one_out, df_feature_importance = xgboost(df_result_metrics, df_leave_one_out, df_feature_importance)
-        df_result_metrics, df_leave_one_out, df_feature_importance = light_gbm(df_result_metrics, df_leave_one_out, df_feature_importance)
+        df_result_metrics, df_classification_report_loo, df_feature_importance = xgboost(df_result_metrics, df_classification_report_loo, df_feature_importance)
+        df_result_metrics, df_classification_report_loo, df_feature_importance = light_gbm(df_result_metrics, df_classification_report_loo, df_feature_importance)
 
 
         save_dataframe(df_result_metrics, result_filename)
+        save_dataframe(df_classification_report_loo, result_file_class_report_loo)
 
-        try:
-            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'F1-Score')
-            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.LOO.value, 'F1-Score')
 
-            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'Mattews Correlation Coef.')
-            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.LOO.value, 'Mattews Correlation Coef.')
-
-            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'Accuracy')
-            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.LOO.value, 'Accuracy')
-        except:
-            print("Something went wrong. Maybe only one model was chosen")
 
     if read_result_df_saved:
         df_result_metrics = load_dataframe(result_filename)
+        df_classification_report_loo = load_dataframe(result_file_class_report_loo)
 
 
     #results_plot.create_plot_result_training_time(df_result_metrics)
     print(df_result_metrics)
     print(tabulate(df_result_metrics, headers='keys', tablefmt='psql'))
-    print(tabulate(df_leave_one_out, headers='keys', tablefmt='psql'))
+    print(tabulate(df_classification_report_loo, headers='keys', tablefmt='psql'))
     print(tabulate(df_feature_importance, headers='keys', tablefmt='psql'))
 
-    report_outputs = True
+    create_bar_plots = True
+    if create_bar_plots:
+        try:
+            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'F1-Score')
+            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.LOO.value, 'F1-Score')
+
+            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'Average Precision')
+            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.LOO.value, 'Average Precision')
+
+            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'Accuracy')
+            results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.LOO.value, 'Accuracy')
+
+
+        except:
+            print("Something went wrong. Maybe only one model was chosen")
+
+    #two results baseline and new features
+
+    plot_two_results = True
+    if plot_two_results:
+        df_result_baseline = load_dataframe("all_classifiers_reproduced_paper_features")
+        df_result_new_features = load_dataframe("all_classifiers_new_features")
+        results_plot.create_plot_two_results_ml(df_result_baseline, df_result_new_features, ValidationMethod.LOO.value, 'Accuracy')
+        results_plot.create_plot_two_results_ml(df_result_baseline, df_result_new_features, ValidationMethod.KFold.value, 'Accuracy')
+
+    report_outputs = False
     if report_outputs:
         #export result as table image
         results_plot.create_table_result(df_result_metrics, ValidationMethod.KFold.value, testset_size, result_filename)
         results_plot.create_table_result(df_result_metrics, ValidationMethod.LOO.value, testset_size, result_filename)
+
+        #loo
+        results_plot.create_table_classification_report_loo(df_classification_report_loo, result_file_class_report_loo)
 
         #time
         results_plot.create_table_result_time_exec(df_result_metrics, 'Leave-One-Out', result_filename)
