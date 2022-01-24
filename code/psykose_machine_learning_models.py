@@ -20,7 +20,6 @@ from sklearn import preprocessing as pp
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn import metrics
 from sklearn.metrics import classification_report, log_loss
-from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import LeaveOneOut
 
@@ -30,8 +29,7 @@ import log_configuration
 import my_metrics
 import psykose_machine_learning_plots as results_plot
 import hyperparameter_tuning as tuning
-from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import RepeatedStratifiedKFold
+
 from datetime import datetime
 
 color = sns.color_palette()
@@ -46,7 +44,6 @@ LOGGER = log_configuration.logger
 
 # provided baseline dataset
 #PATH_TO_FILE = "../psykose/schizophrenia-features.csv"
-
 
 # baseline dataset with new features
 PATH_TO_FILE = "baseline_time_period.csv"
@@ -143,7 +140,7 @@ X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
     dataY,
     test_size=testset_size,
     random_state=2019,
-    stratify=dataY
+    stratify=dataY   #keep the proportion of the classes for each subset
 )
 
 
@@ -200,14 +197,15 @@ def plot_roc_curve(y_preds, y_trues, title=None):
 
     return auc_roc
 
-def plot_traning_curves(rfc_y_preds, rfc_y_trues):
-    plot_prc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Validation PRC")
-    plot_roc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Validation ROC")
+    # precision-recall curves (PRC)
+    # Receiver-operator curves (ROC)
+def plot_traning_curves(rfc_y_preds, rfc_y_trues, classifier_name, method):
+    plot_prc_curve(rfc_y_preds, rfc_y_trues, f"{classifier_name} - {method} - PRC")
+    plot_roc_curve(rfc_y_preds, rfc_y_trues, f"{classifier_name} - {method} - ROC")
 
-
-def plot_testing_curves(rfc_test_preds, Y_TEST):
-    plot_prc_curve(rfc_test_preds, Y_TEST, "RFC Testing PRC")
-    plot_roc_curve(rfc_test_preds, Y_TEST, "RFC Testing ROC")
+def plot_testing_curves(rfc_test_preds, Y_TEST, classifier_name, method):
+    plot_prc_curve(rfc_test_preds, Y_TEST, f"{classifier_name} - {method} - PRC")
+    plot_roc_curve(rfc_test_preds, Y_TEST, f"{classifier_name} - {method} - ROC")
 
 def model_predict_k_fold(train_func, pred_func, model=None, n_splits=10, shuffle=True, random_state=2018):
     y_preds = []
@@ -304,6 +302,21 @@ def create_result_output(classifier_name, method, average_precision, auc_roc, me
     }
     return row_stats
 
+def create_classification_report_output(dict_report, classifier_name):
+    #dict_report = classification_report(Y_TEST, logreg_loo_test_preds.round(), output_dict=True)
+    df_classification_report_loo = pd.DataFrame()
+    for key, value in dict_report.items():
+        row_loo = {"Classifier": classifier_name}
+        if isinstance(value, dict):
+            print(get_name_from_value(key))
+            row_loo["Class"] = get_name_from_value(key)
+            row_loo.update(value)
+
+            # collect the result for leave one out
+            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
+
+    return df_classification_report_loo
+
 def collect_matrics(y_true, y_pred, classifier_name, method_short_name, time_elapsed, testset_size):
 
     modelMetricsKfold = my_metrics.ModelMetrics(y_true, y_pred)
@@ -314,9 +327,13 @@ def collect_matrics(y_true, y_pred, classifier_name, method_short_name, time_ela
     average_precision = modelMetricsKfold.average_precision_score()
     auc_roc = modelMetricsKfold.auc_roc()
 
+    #this is used for LOO in the paper.
+    dict_classification_report = modelMetricsKfold.classification_report()
+    df_classification_report_loo = create_classification_report_output(dict_classification_report, classifier_name)
+
     row_results = create_result_output(classifier_name, method_short_name, average_precision, auc_roc, metric_mattews_coef, f1_score, accuracy,
                          time_elapsed, testset_size)
-    return row_results
+    return row_results, df_classification_report_loo
 
 
 #Logistic Regression
@@ -337,27 +354,21 @@ def logistic_regression(df_result_metrics, df_classification_report_loo, df_feat
 
     logger.info(f"{classifier_name} - {method_name}")
 
-    #kfold
+    ################# kfold
 
     logreg = LogisticRegression(**_PARAMS_LORGREG)
     logreg, logreg_y_preds, logreg_y_trues, time_elapsed = model_predict_k_fold(logreg_train_func, logreg_pred_func, logreg)
     logreg_test_preds = logreg_pred_func(logreg, X_TEST)
 
-
     # collect the results - KFold
 
-    # precision-recall curves (PRC)
-    # Receiver-operator curves (ROC)
-    plot_prc_curve(logreg_y_preds, logreg_y_trues, "LogReg Cross-Vaidation PRC")
-    plot_roc_curve(logreg_y_preds, logreg_y_trues, "LogReg Cross-Vaidation ROC")
-
-    plot_prc_curve(logreg_test_preds, Y_TEST, "LogReg Testing PRC")
-    plot_roc_curve(logreg_test_preds, Y_TEST, "LogReg Testing ROC")
+    #plot_traning_curves(logreg_y_preds, logreg_y_trues, classifier_name, method_name)
+    plot_testing_curves(logreg_test_preds, Y_TEST, classifier_name, method_name)
 
     # collect the result
     create_confusion_matrix(Y_TEST, logreg_test_preds.round(), classifier_name, method_short_name)
 
-    metrics_logreg_kfold = collect_matrics(Y_TEST, logreg_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    metrics_logreg_kfold, _ = collect_matrics(Y_TEST, logreg_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_logreg_kfold, ignore_index=True)
 
     fi_log_reg_kfold = pd.Series(logreg.coef_[0], index=X_TRAIN.columns)
@@ -369,7 +380,7 @@ def logistic_regression(df_result_metrics, df_classification_report_loo, df_feat
         row_features.update(new_values)
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
-    # Leave one out
+    ############################### Leave one out
     method_name = ValidationMethod.LOO.value
     method_short_name = ValidationMethod.LOO.name
 
@@ -381,22 +392,17 @@ def logistic_regression(df_result_metrics, df_classification_report_loo, df_feat
 
 
     print(classification_report(Y_TEST, logreg_loo_test_preds.round()))
-    dict_report = classification_report(Y_TEST, logreg_loo_test_preds.round(), output_dict=True)
-    for key, value in dict_report.items():
-        row_loo = {"Classifier": classifier_name}
-        if isinstance(value, dict):
-            print(get_name_from_value(key))
-            row_loo["Class"] = get_name_from_value(key)
-            row_loo.update(value)
 
-            # collect the result for leave one out
-            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
+    #plot_traning_curves(logreg_y_preds, logreg_y_trues, classifier_name, method_name)
+    plot_testing_curves(logreg_loo_test_preds, Y_TEST, classifier_name, method_name)
 
     fi_log_reg_loo = pd.Series(logreg_loo.coef_[0], index=X_TRAIN.columns)
     plot_feature_importance(fi_log_reg_loo, classifier_name, method_short_name)
 
-    metrics_logreg_loo = collect_matrics(Y_TEST, logreg_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    metrics_logreg_loo, df_classification_report_logreg = collect_matrics(Y_TEST, logreg_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_logreg_loo, ignore_index=True)
+    df_classification_report_loo = pd.concat([df_classification_report_loo,df_classification_report_logreg])
+
 
     return df_result_metrics, df_classification_report_loo, df_feature_importance
 
@@ -413,6 +419,7 @@ def random_forest(df_result_metrics, df_classification_report_loo, df_feature_im
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
 
+    ###### KFold
     method_name = ValidationMethod.KFold.value
     method_short_name = ValidationMethod.KFold.name
 
@@ -422,20 +429,13 @@ def random_forest(df_result_metrics, df_classification_report_loo, df_feature_im
     rfc, rfc_y_preds, rfc_y_trues, time_elapsed = model_predict_k_fold(rfc_train_func, rfc_pred_func, rfc)
     rfc_test_preds = rfc_pred_func(rfc, X_TEST)
 
-
-    plot_prc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Validation PRC")
-    plot_roc_curve(rfc_y_preds, rfc_y_trues, "RFC Cross-Vaidation ROC")
-
-    plot_prc_curve(rfc_test_preds, Y_TEST, "RFC Testing PRC")
-    plot_roc_curve(rfc_test_preds, Y_TEST, "RFC Testing ROC")
-
-    plot_traning_curves(rfc_y_preds, rfc_y_trues)
-    plot_testing_curves(rfc_test_preds, Y_TEST)
+    #plot_traning_curves(rfc_y_preds, rfc_y_trues, classifier_name, method_name)
+    plot_testing_curves(rfc_test_preds, Y_TEST, classifier_name, method_name)
 
     create_confusion_matrix(Y_TEST, rfc_test_preds.round(), classifier_name, method_short_name)
 
     # collect the result
-    metrics_rf_kfold = collect_matrics(Y_TEST, rfc_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    metrics_rf_kfold, _ = collect_matrics(Y_TEST, rfc_test_preds, classifier_name, method_name, time_elapsed, testset_size)
 
     df_result_metrics = df_result_metrics.append(metrics_rf_kfold, ignore_index=True)
 
@@ -451,7 +451,7 @@ def random_forest(df_result_metrics, df_classification_report_loo, df_feature_im
         row_features.update(new_values)
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
-    # Leave one out
+    ###### Leave one out
 
     method_name = ValidationMethod.LOO.value
     method_short_name = ValidationMethod.LOO.name
@@ -463,25 +463,18 @@ def random_forest(df_result_metrics, df_classification_report_loo, df_feature_im
 
     print(classification_report(Y_TEST, rfc_loo_test_preds.round()))
 
-    dict_report = classification_report(Y_TEST, rfc_loo_test_preds.round(), output_dict=True)
-    for key, value in dict_report.items():
-        row_loo = {"Classifier": "Random Forest"}
-        if isinstance(value, dict):
-            row_loo["Class"] = get_name_from_value(key)
-            row_loo.update(value)
-
-            # collect the result for leave one out
-            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
-
     importance = rfc_loo.feature_importances_
     fi_r_forest_kfold = pd.Series(importance, index=X_TRAIN.columns)
     plot_feature_importance(fi_r_forest_kfold, classifier_name, method_name)
 
+    #plot_traning_curves(logreg_y_preds, logreg_y_trues, classifier_name, method_name)
+    plot_testing_curves(rfc_loo_test_preds, Y_TEST, classifier_name, method_name)
+
     create_confusion_matrix(Y_TEST, rfc_loo_test_preds.round(), classifier_name, method_short_name)
 
-    metrics_rf_loo = collect_matrics(Y_TEST, rfc_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
-
+    metrics_rf_loo, df_classification_report_rf  = collect_matrics(Y_TEST, rfc_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_rf_loo, ignore_index=True)
+    df_classification_report_loo = pd.concat([df_classification_report_loo,df_classification_report_rf])
 
     return df_result_metrics, df_classification_report_loo, df_feature_importance
 
@@ -500,6 +493,7 @@ def decision_tree(df_result_metrics, df_classification_report_loo, df_feature_im
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
 
+    ####################### KFold
     method_name = ValidationMethod.KFold.value
     method_short_name = ValidationMethod.KFold.name
     logger.info(f"{classifier_name} - {method_name}")
@@ -509,16 +503,13 @@ def decision_tree(df_result_metrics, df_classification_report_loo, df_feature_im
     dtc, dtc_y_preds, dtc_y_trues, time_elapsed = model_predict_k_fold(dtc_train_func, dtc_pred_func, dtc)
     dtc_test_preds = dtc_pred_func(dtc, X_TEST)
 
-    plot_prc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation PRC")
-    plot_roc_curve(dtc_y_preds, dtc_y_trues, "RFC Cross-Vaidation ROC")
-
-    plot_prc_curve(dtc_test_preds, Y_TEST, "RFC Testing PRC")
-    plot_roc_curve(dtc_test_preds, Y_TEST, "RFC Testing ROC")
+    #plot_traning_curves(dtc_y_preds, dtc_y_trues, classifier_name, method_name)
+    plot_testing_curves(dtc_test_preds, Y_TEST, classifier_name, method_name)
 
     create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
 
     # collect the result
-    metrics_dt_kfold = collect_matrics(Y_TEST, dtc_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    metrics_dt_kfold, _ = collect_matrics(Y_TEST, dtc_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_dt_kfold, ignore_index=True)
 
     # get importance
@@ -534,7 +525,7 @@ def decision_tree(df_result_metrics, df_classification_report_loo, df_feature_im
         row_features.update(new_values)
     df_feature_importance = df_feature_importance.append(row_features, ignore_index=True)
 
-    # Leave one out
+    ############################ Leave one out
     method_name = ValidationMethod.LOO.value
     method_short_name = ValidationMethod.LOO.name
     logger.info(f"{classifier_name} - {method_name}")
@@ -551,21 +542,14 @@ def decision_tree(df_result_metrics, df_classification_report_loo, df_feature_im
     fi_dtree_loo = pd.Series(importance, index=X_TRAIN.columns)
     plot_feature_importance(fi_dtree_loo, classifier_name, method_short_name)
 
+    #plot_traning_curves(logreg_y_preds, logreg_y_trues, classifier_name, method_name)
+    plot_testing_curves(dtc_loo_test_preds, Y_TEST, classifier_name, method_name)
 
-    dict_report = classification_report(Y_TEST, dtc_loo_test_preds.round(), output_dict=True)
-    for key, value in dict_report.items():
-        row_loo = {"Classifier": "Decision Tree"}
-        if isinstance(value, dict):
-            row_loo["Class"] = get_name_from_value(key)
-            row_loo.update(value)
+    create_confusion_matrix(Y_TEST, dtc_loo_test_preds.round(), classifier_name, method_short_name)
 
-            # collect the result for leave one out
-            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
-
-    create_confusion_matrix(Y_TEST, dtc_test_preds.round(), classifier_name, method_short_name)
-
-    metrics_dt_loo = collect_matrics(Y_TEST, dtc_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    metrics_dt_loo, df_classification_report_dt = collect_matrics(Y_TEST, dtc_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_dt_loo, ignore_index=True)
+    df_classification_report_loo = pd.concat([df_classification_report_loo, df_classification_report_dt])
 
     return df_result_metrics, df_classification_report_loo, df_feature_importance
 
@@ -596,6 +580,7 @@ def xgboost(df_result_metrics, df_classification_report_loo, df_feature_importan
     logger = log_configuration.logger
     logger.info(f"{classifier_name}...")
 
+    ####################### KFold
     method_name = ValidationMethod.KFold.value
     method_short_name = ValidationMethod.KFold.name
     logger.info(f"{classifier_name} - {method_name}")
@@ -605,16 +590,10 @@ def xgboost(df_result_metrics, df_classification_report_loo, df_feature_importan
     xgb_model, xgb_y_preds, xgb_y_trues, time_elapsed = model_predict_k_fold(xgb_train_func, xgb_pred_func)
     xgb_test_preds = xgb_pred_func(xgb_model, X_TEST)
 
-    plot_prc_curve(xgb_y_preds, xgb_y_trues, "XGB Cross-Vaidation PRC")
-    plot_roc_curve(xgb_y_preds, xgb_y_trues, "XGB Cross-Vaidation ROC")
+    #plot_traning_curves(xgb_y_preds, xgb_y_trues, classifier_name, method_name)
+    plot_testing_curves(xgb_test_preds, Y_TEST, classifier_name, method_name)
 
-    plot_prc_curve(xgb_test_preds, Y_TEST, "XGB Testing PRC")
-    plot_roc_curve(xgb_test_preds, Y_TEST, "XGB Testing ROC")
-
-
-    #kfold
-    metrics_xgb_kfold = collect_matrics(Y_TEST, xgb_test_preds, classifier_name, method_name, time_elapsed, testset_size)
-
+    metrics_xgb_kfold, _ = collect_matrics(Y_TEST, xgb_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_xgb_kfold, ignore_index=True)
 
     # plot feature importance
@@ -638,23 +617,18 @@ def xgboost(df_result_metrics, df_classification_report_loo, df_feature_importan
     xgb_loo_test_preds = xgb_pred_func(xgb_loo, X_TEST)
 
     print(classification_report(Y_TEST, xgb_loo_test_preds.round()))
-    dict_report = classification_report(Y_TEST, xgb_loo_test_preds.round(), output_dict=True)
-    for key, value in dict_report.items():
-        row_loo = {"Classifier": "XGBoost"}
-        if isinstance(value, dict):
-            row_loo["Class"] = get_name_from_value(key)
-            row_loo.update(value)
-
-            # collect the result for leave one out
-            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
 
     # plot feature importance
     plot_importance(xgb_loo)
     plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
-    metrics_xgb_loo = collect_matrics(Y_TEST, xgb_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    #plot_traning_curves(logreg_y_preds, logreg_y_trues, classifier_name, method_name)
+    plot_testing_curves(xgb_loo_test_preds, Y_TEST, classifier_name, method_name)
+
+    metrics_xgb_loo, df_classification_report_xgboost = collect_matrics(Y_TEST, xgb_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_xgb_loo, ignore_index=True)
+    df_classification_report_loo = pd.concat([df_classification_report_loo, df_classification_report_xgboost])
 
     return df_result_metrics, df_classification_report_loo, df_feature_importance
 
@@ -690,17 +664,13 @@ def light_gbm(df_result_metrics, df_classification_report_loo, df_feature_import
     gbm, gbm_y_preds, gbm_y_trues, time_elapsed = model_predict_k_fold(gbm_train_func, gbm_pred_func)
     gbm_test_preds = gbm_pred_func(gbm, X_TEST)
 
-    plot_prc_curve(gbm_y_preds, gbm_y_trues, "GBM Cross-Vaidation PRC")
-    plot_roc_curve(gbm_y_preds, gbm_y_trues, "GBM Cross-Vaidation ROC")
-
-    plot_prc_curve(gbm_test_preds, Y_TEST, "GBM Testing PRC")
-    plot_roc_curve(gbm_test_preds, Y_TEST, "GBM Testing ROC")
-
+    #plot_traning_curves(gbm_y_preds, gbm_y_trues, classifier_name, method_name)
+    plot_testing_curves(gbm_test_preds, Y_TEST, classifier_name, method_name)
 
     # collect the result
     create_confusion_matrix(Y_TEST, gbm_test_preds.round(), classifier_name, method_short_name)
 
-    metrics_lgbm_kfold = collect_matrics(Y_TEST, gbm_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    metrics_lgbm_kfold, _ = collect_matrics(Y_TEST, gbm_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_lgbm_kfold, ignore_index=True)
 
     title = f"Feature Importance - {classifier_name} - {method_name}"
@@ -733,17 +703,10 @@ def light_gbm(df_result_metrics, df_classification_report_loo, df_feature_import
 
     print(classification_report(Y_TEST, lgbm_loo_test_preds.round()))
 
-    dict_report = classification_report(Y_TEST, lgbm_loo_test_preds.round(), output_dict=True)
-    for key, value in dict_report.items():
-        row_loo = {"Classifier": "LightGBM"}
-        if isinstance(value, dict):
-            row_loo["Class"] = get_name_from_value(key)
-            row_loo.update(value)
-
-            # collect the result for leave one out
-            df_classification_report_loo = df_classification_report_loo.append(row_loo, ignore_index=True)
-
     create_confusion_matrix(Y_TEST, lgbm_loo_test_preds.round(), classifier_name, method_short_name)
+
+    #plot_traning_curves(logreg_y_preds, logreg_y_trues, classifier_name, method_name)
+    plot_testing_curves(lgbm_loo_test_preds, Y_TEST, classifier_name, method_name)
 
     print('Plotting feature importances...')
     title = (f"Feature Importance - {classifier_name} - {method_name}")
@@ -751,8 +714,9 @@ def light_gbm(df_result_metrics, df_classification_report_loo, df_feature_import
     #plt.title(f"Feature Importance - {classifier_name} - {method_name}")
     plt.show()
 
-    metrics_lgbm_kfold = collect_matrics(Y_TEST, lgbm_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
+    metrics_lgbm_kfold, df_classification_report_lgbm = collect_matrics(Y_TEST, lgbm_loo_test_preds, classifier_name, method_name, time_elapsed, testset_size)
     df_result_metrics = df_result_metrics.append(metrics_lgbm_kfold, ignore_index=True)
+    df_classification_report_loo = pd.concat([df_classification_report_loo, df_classification_report_lgbm])
 
     return df_result_metrics, df_classification_report_loo, df_feature_importance
 
@@ -801,8 +765,8 @@ if __name__ == '__main__':
     config_params['show_roc'] = True
 
     run_hyper_tuning = False
-    run_models = False
-    read_result_df_saved = True
+    run_models = True
+    read_result_df_saved = False
     check_options(run_hyper_tuning, run_models, read_result_df_saved)
 
     if run_hyper_tuning:
@@ -819,23 +783,24 @@ if __name__ == '__main__':
     #todo create class to manage the changing between the datasets and file names below
     # DF saved files names
     #result_filename = "all_classifiers_provided_paper_features"
-    result_filename = "all_classifiers_new_features"
+    #result_filename = "all_classifiers_new_features"
     #result_filename = "all_classifiers_reproduced_paper_features"
-    #result_filename = "single_classifier"
+    result_filename = "single_classifier"
 
     #file names for classification report for LOO
-    result_file_class_report_loo = "class_report_all_classifiers_new_features"
+    #result_file_class_report_loo = "class_report_all_classifiers_new_features"
     #result_file_class_report_loo = "class_report_all_classifiers_reproduced_features"
+    result_file_class_report_loo = "class_report_single_classifier"
 
     if run_models:
         logger.info("Run models...")
         df_result_metrics, df_classification_report_loo, df_feature_importance = logistic_regression(df_result_metrics,  df_classification_report_loo, df_feature_importance)
 
-        df_result_metrics, df_classification_report_loo, df_feature_importance = decision_tree(df_result_metrics, df_classification_report_loo, df_feature_importance)
-        df_result_metrics, df_classification_report_loo, df_feature_importance = random_forest(df_result_metrics, df_classification_report_loo,df_feature_importance)
+        #df_result_metrics, df_classification_report_loo, df_feature_importance = decision_tree(df_result_metrics, df_classification_report_loo, df_feature_importance)
+        #df_result_metrics, df_classification_report_loo, df_feature_importance = random_forest(df_result_metrics, df_classification_report_loo,df_feature_importance)
 
-        df_result_metrics, df_classification_report_loo, df_feature_importance = xgboost(df_result_metrics, df_classification_report_loo, df_feature_importance)
-        df_result_metrics, df_classification_report_loo, df_feature_importance = light_gbm(df_result_metrics, df_classification_report_loo, df_feature_importance)
+        #df_result_metrics, df_classification_report_loo, df_feature_importance = xgboost(df_result_metrics, df_classification_report_loo, df_feature_importance)
+        #df_result_metrics, df_classification_report_loo, df_feature_importance = light_gbm(df_result_metrics, df_classification_report_loo, df_feature_importance)
 
 
         save_dataframe(df_result_metrics, result_filename)
@@ -854,7 +819,7 @@ if __name__ == '__main__':
     print(tabulate(df_classification_report_loo, headers='keys', tablefmt='psql'))
     print(tabulate(df_feature_importance, headers='keys', tablefmt='psql'))
 
-    create_bar_plots = True
+    create_bar_plots = False
     if create_bar_plots:
         try:
             results_plot.create_plot_result_ml(df_result_metrics, ValidationMethod.KFold.value, 'F1-Score')
@@ -872,7 +837,7 @@ if __name__ == '__main__':
 
     #two results baseline and new features
 
-    plot_two_results = True
+    plot_two_results = False
     if plot_two_results:
         df_result_baseline = load_dataframe("all_classifiers_reproduced_paper_features")
         df_result_new_features = load_dataframe("all_classifiers_new_features")

@@ -32,7 +32,7 @@ class ModelMetrics:
         return precision_recall_fscore_support(self.y_true, self.y_preds.round())
 
     def classification_report(self):
-        return classification_report(self.y_true, self.y_preds.round())
+        return classification_report(self.y_true, self.y_preds.round(), output_dict=True)
 
     def auc_roc(self):
         '''
