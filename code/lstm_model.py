@@ -4,11 +4,13 @@ import sys, inspect
 import numpy as np
 import pandas as pd
 
-# cnn model
+from datetime import datetime
+from matplotlib import pyplot, pyplot as plt
 from numpy import dstack
-
-
 from scipy import stats
+
+# cnn model
+from tensorflow import keras
 import tensorflow as tf
 from keras.models import Sequential
 from keras.layers import Dense
@@ -24,16 +26,12 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import train_test_split
 from keras.callbacks import EarlyStopping
 
-from datetime import datetime
-from matplotlib import pyplot, pyplot as plt
-
-from tensorflow import keras
-
+#my functions
 import log_configuration
 import my_metrics
 from psykose import LoadDataset, PreProcessing, eda_baseline_date_range
 
-logger = log_configuration.logger
+LOGGER = log_configuration.logger
 
 #for each user
 def process_dataset(dataset):
@@ -78,12 +76,11 @@ def process_dataset(dataset):
     return x_values, y_values
 
 def create_time_window(df_dataset):
-    logger = log_configuration.logger
-    logger.info("Creating time window...")
+    LOGGER.info("Creating time window...")
 
-    window_size = 380  # 50 records in each sequence
-    N_FEATURES = 2  # activity and category
-    step = 10  # window overlap = 50 -10 = 40  (80% overlap)
+    window_size = 380
+    N_FEATURES = 2
+    step = 10
 
     segments = []
     labels = []
@@ -97,7 +94,7 @@ def create_time_window(df_dataset):
         segments.append([x_activity, x_category])
         labels.append(y_label)
 
-    # reshape the segments which is (list of arrays) to one list
+
     reshaped_segments = np.asarray(segments, dtype=np.float32).reshape(-1, window_size, N_FEATURES)
     labels = np.asarray(pd.get_dummies(labels), dtype=np.float32)
     reshaped_segments.shape
@@ -108,8 +105,7 @@ def create_time_window(df_dataset):
 
 
 def split_dataset(x_values, y_values):
-    logger = log_configuration.logger
-    logger.info("Splitting dataset...")
+    LOGGER.info("Splitting dataset...")
 
     RANDOM_SEED = 24
     #x = dstack(x_values)
@@ -150,7 +146,7 @@ def evaluate_ltsm_model(X_train, X_test, y_train, y_test):
     _, accuracy = model.evaluate(X_test, y_test, batch_size=batch_size, verbose=verbose)
 
 
-def evaluate_cnn_model(X_train, X_test, y_train, y_test):
+def evaluate_cnn_model_2d(X_train, X_test, y_train, y_test):
     logger = log_configuration.logger
     logger.info("CNN model running...")
 
@@ -182,8 +178,7 @@ def evaluate_cnn_model(X_train, X_test, y_train, y_test):
 
 
 def run_cnn_model_working(X_train, X_test, y_train, y_test):
-    logger = log_configuration.logger
-    logger.info("CNN model running...")
+    LOGGER.info("CNN model running...")
 
     verbose = 1
     epochs = 30
@@ -241,11 +236,11 @@ def result_plot(history):
     pyplot.legend()
     pyplot.show()
 
-def create_confusion_matrix(y_true, y_preds, classifier_name=None, method_short_name=None):
-    cm = confusion_matrix(y_true, y_preds) #, normalize='all'
+def create_confusion_matrix(y_true, y_preds, classifier_name=None):
+    cm = confusion_matrix(y_true, y_preds, normalize='all')
     cmd = ConfusionMatrixDisplay(cm, display_labels=['healthy', 'patient'])
     cmd = cmd.plot(cmap=plt.cm.Blues, values_format='g')
-    cmd.ax_.set_title(f'Confusion Matrix - {classifier_name} - {method_short_name}')
+    cmd.ax_.set_title(f'Confusion Matrix - {classifier_name} ')
     cmd.plot()
     #cmd.ax_.set(xlabel='Predicted', ylabel='True')
 
@@ -258,17 +253,15 @@ def check_options(*options):
     :param options:
     :return:
     '''
-    logger = log_configuration.logger
 
     try:
         assert sum(options) == 1
     except Exception as e:
-        logger.error("Only one option must be chosen")
+        LOGGER.error("Only one option must be chosen")
         exit()
 
 if __name__ == '__main__':
-
-    logger.info("Script started...")
+    LOGGER.info("Script started...")
 
     dict_dataset = LoadDataset().get_dataset_joined()
     preProcessing = PreProcessing(dict_dataset)
@@ -312,7 +305,7 @@ if __name__ == '__main__':
 
     print(f" mcc: {metric_mattews_coef} - f1: {f1_score} - acc: {accuracy}")
 
-    create_confusion_matrix(y_test_arg, y_predicted_arg, "CNN", None)
+    create_confusion_matrix(y_test_arg, y_predicted_arg, "CNN")
 
 
 
