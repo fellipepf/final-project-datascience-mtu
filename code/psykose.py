@@ -10,177 +10,24 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import pandas as pd
+import dataframe_image as dfi
 from scipy.signal import find_peaks
 from scipy.stats import kurtosis, skew
 from collections import OrderedDict
 
+import seaborn as sns
+from tabulate import tabulate
+
 import baseline_eda
 import log_configuration
+from psykose_dataset import LoadDataset
+from psykose_dataset import PreProcessing
 from collected_days import DaysCollected
 import utils
 
 class Target(Enum):
     PATIENT = 1
     CONTROL = 0
-
-class LoadDataset:
-
-    def __init__(self):
-        self.logger = log_configuration.logger
-
-        self.control, self.patient = self.create_structure()
-
-    def loadFileCSV(self, dir, Target):
-        content = {}
-        files = glob.glob(dir)
-        for file in files:
-            data = pd.read_csv(file, delimiter=',' )
-            key = self.getName(file)
-            content[key] = {}
-            content[key]['timeserie'] = data
-            content[key]['target'] = Target
-
-        return content
-
-    def getName(self, name):
-        return os.path.basename(name).split('.')[0]
-
-
-    def create_structure(self):
-        self.logger.info('Loading files...')
-
-        #dir_control = "../psykose/control/*.csv"
-        dir_control = "/Users/fellipeferreira/OneDrive/CIT - Master Data Science/Semester 3/project/final-project-datascience-mtu/psykose/control/*.csv"
-        #dir_patient = "../psykose/patient/*.csv"
-        dir_patient = "/Users/fellipeferreira/OneDrive/CIT - Master Data Science/Semester 3/project/final-project-datascience-mtu/psykose/patient/*.csv"
-
-        contentControl = self.loadFileCSV(dir_control, Target.CONTROL)
-        contentPatient = self.loadFileCSV(dir_patient, Target.PATIENT)
-
-    #print(contentControl)
-    #structureControl = pd.DataFrame(zip(contentControl), columns=["data"])
-
-        return contentControl, contentPatient
-
-    def get_dataset_by_class(self):
-        return self.control, self.patient
-
-    def get_dataset_joined(self):
-        #return self.control | self.patient  #python 3.9
-        return dict(self.control, **self.patient)
-
-
-
-#include methods to limit values by number of days
-# transform in only one dataset
-class PreProcessing:
-
-    def __init__(self, *args):
-        self.logger = log_configuration.logger
-
-        if len(args) == 1:
-            self.control_patient = args[0]
-
-        if len(args) == 2:
-            self.control_patient = args[0] | args[1]
-
-        #Dictinary structure
-        #filter dataset by number of days
-        self.control_patient_byday = self.__process_dataset_byday(self.control_patient)
-
-        #split by time perio
-
-        #Dataframe structure
-        #transform dataset from dict to just one dataframe
-        self.df_dataset =  self.create_one_df_struture(self.control_patient_byday)
-
-        self.df_structure_category(self.df_dataset)
-
-    '''
-    This function reduce the dataset to the number of days for each person
-    '''
-    def __process_dataset_byday(self, dataset):
-        self.logger.info('Split dataset by day...')
-
-        dic_result = dict()
-        remove_fist_day = True
-
-        days_collected = DaysCollected()
-        days = days_collected.get_days_collected()
-
-        for key in set(dataset.keys()).difference({'target'}):
-            value = dataset[key]
-
-            df = value['timeserie']
-            user_class = value['target']
-
-            df["datetime"] = pd.to_datetime(df["timestamp"])
-            # group_day = df.groupby(df["datetime"].dt.day)['activity']
-
-            n_days_limit = days.loc[days['id'] == key]['days'].item()
-            group_day = df.groupby(pd.Grouper(key='datetime', freq='D'))
-
-            if remove_fist_day:
-                list_days = list(group_day)
-
-                # remove first day and
-                # slice n number of elements defined
-                group_n_days = list_days[1:n_days_limit + 1]
-            else:
-                group_n_days = list(group_day)[:n_days_limit]
-
-            # get the second element from tuple in a list using comprehension list
-            df_days = [tuple[1] for tuple in group_n_days]
-
-            # df_result.extend(group_n_days)
-
-            # transform list of dataframes to only one dataframe
-            # df_all = pd.concat(df_days)
-            # df_all['class'] = user_class
-
-            dic_result[key] = {}
-            dic_result[key]['timeserie'] = df_days
-            dic_result[key]['user_class'] = user_class
-
-        return dic_result
-
-
-    def create_one_df_struture(self, control_patient_byday):
-        self.logger.info('Creating dataframe with all values...')
-
-        df_data_set = pd.DataFrame()
-
-        for key, value in control_patient_byday.items():
-            df_ts = value['timeserie']
-            df_ts = pd.concat(df_ts)
-
-            df_ts['user'] = key
-            df_ts['class'] = value['user_class']
-
-            df_data_set = df_data_set.append(df_ts, ignore_index=True )
-
-        return df_data_set
-
-    def df_structure_category(self, df_data_set):
-        df_data_set = df_data_set.set_index('datetime')
-        df_data_set['category'] = None
-
-        #morning
-        df_data_set['category'][(df_data_set.index.hour >= 0) & (df_data_set.index.hour < 7)] = 0
-
-        #afternoon
-        df_data_set['category'][(df_data_set.index.hour >= 7) & (df_data_set.index.hour < 19)] = 1
-
-        #night
-        df_data_set['category'][(df_data_set.index.hour >= 19) & (df_data_set.index.hour < 24)] = 2
-
-        #n = df_data_set[df_data_set['category'] == None ]
-
-        return df_data_set
-
-
-
-
 
 class CreateBaseline:
     def __init__(self, *args):
@@ -282,7 +129,10 @@ def generate_baseline(dataset):
             kurtosis_value = kurtosis(daily_serie[1]['activity'], fisher=False)
             skewness = skew(daily_serie[1]['activity'])
 
-            row_day = {'userid': key, 'class': user_class.value, 'date':date, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero, 'kurtosis': kurtosis_value, 'skew': skewness}
+            row_day = {'userid': key, 'class': user_class.value, 'date':date, 'mean': mean, 'sd': sd, 'prop_zero': proportion_zero,
+                       #'kurtosis': kurtosis_value,
+                       #'skew': skewness
+                       }
             df_stats = df_stats.append(row_day, ignore_index=True )
 
 
@@ -327,8 +177,9 @@ def graph_patient_avg_by_hour(patient):
     fig, axs = plt.subplots(figsize=(12, 4))
     df_patient.groupby(df_patient["datetime"].dt.hour)["activity"].mean().plot(
         kind='line', rot=0, ax=axs)
+    plt.title(f"Average of activity by hour - {userid} ")
     plt.xlabel("Hour of the day");  # custom x label using matplotlib
-    plt.ylabel("activity");
+    plt.ylabel("activity")
     plt.show()
 
 def graph_control_avg_by_hour(control):
@@ -343,8 +194,63 @@ def graph_control_avg_by_hour(control):
     fig, axs = plt.subplots(figsize=(12, 4))
     df_control.groupby(df_control["datetime"].dt.hour)["activity"].mean().plot(
         kind='line', rot=0, ax=axs)
+    plt.title(f"Average of activity by hour - {userid} ")
     plt.xlabel("Hour of the day");  # custom x label using matplotlib
     plt.ylabel("activity");
+    plt.show()
+
+def caculate_mean_hour_all_participant(mean_hour):
+    #print(tabulate(mean_hour, headers='keys', tablefmt='psql'))
+    transpose = [e.T for e in mean_hour]
+    transpose = pd.DataFrame(transpose)
+    df_mean_column = transpose.aggregate(['mean'])
+
+    #back to one column shape
+    df_mean_column = df_mean_column.T
+    return df_mean_column
+
+def graph_avg_activity_all_participants(dataset):
+    mean_per_user = pd.DataFrame()
+
+    for key in set(dataset.keys()).difference({'target'}):
+        value = dataset[key]
+
+        df = value['timeserie']
+        user_class = value['target']
+
+        mean_values = df.groupby(df["datetime"].dt.hour)["activity"].mean()
+        row = {}
+        row['target'] = user_class
+        row['mean_hour'] = mean_values
+
+        mean_per_user = mean_per_user.append(row, ignore_index=True)
+
+    #control
+    filter = mean_per_user["target"] == Target.CONTROL
+    control_data = mean_per_user[filter]
+
+    filter = mean_per_user["target"] == Target.PATIENT
+    patient_data = mean_per_user[filter]
+
+    mean_hour_control = control_data['mean_hour']
+    mean_by_day_control = caculate_mean_hour_all_participant(mean_hour_control)
+    mean_by_day_control = mean_by_day_control.reindex()
+
+    mean_hour_patient = patient_data['mean_hour']
+    mean_by_day_patient = caculate_mean_hour_all_participant(mean_hour_patient)
+    mean_by_day_patient = mean_by_day_patient.reindex()
+
+    df_to_plot = pd.DataFrame()
+    df_to_plot['control'] = mean_by_day_control['mean'].tolist()
+    df_to_plot['patient'] = mean_by_day_patient['mean'].tolist()
+    import matplotlib.ticker as ticker
+    #plt.figure(figsize=(20, 12))
+    ax = sns.lineplot( data=df_to_plot)
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(2))
+    plt.xlabel("Hour")
+    plt.ylabel("Mean Activity")
+    plt.title("Mean Activity by Hour of Patients and Control")
+
     plt.show()
 
 def graph_activity_by_period(control):
@@ -512,7 +418,7 @@ def calculate_statistics(daily_serie):
     max = daily_serie['activity'].max()
     median = daily_serie['activity'].median()
 
-    #mean absolute deviation
+    #median absolute deviation
     x = daily_serie['activity']  # pd.Series()
     mad = (x - x.median()).abs().median()
 
@@ -556,7 +462,11 @@ def eda_baseline_date_range(baseline):
     for index, (key, value) in enumerate(baseline.items()):
 
         df_timeserie = value["timeserie"]
-        user_class = value ["target"]
+
+        if "target" in value:
+            user_class = value ["target"]
+        elif "user_class" in value:
+            user_class = value ["user_class"]
 
         df_timeserie['datetime'] = pd.to_datetime(df_timeserie['timestamp'])
 
@@ -593,11 +503,12 @@ if __name__ == '__main__':
     logger = log_configuration.logger
 
     ##configuration
+    #todo add option to export reproduced_dataset and new_features_dataset /
     export_baseline_to_html = False
-    export_baseline_to_csv = True
+    export_baseline_to_csv = False
 
     # EDA
-    show_timeseries_graph = False
+    show_timeseries_graph = True
     show_baseline_boxplot = False
     generate_baseline_info = False
 
@@ -609,22 +520,35 @@ if __name__ == '__main__':
 
 
 
-    #in construction
+
     data_process = PreProcessing(control, patient)
+
     baseline_eda.find_peak_above_avg(data_process.control_patient_byday)
     baseline_eda.plot_graph_one_day(data_process.control_patient_byday)
     baseline_eda.plot_graph_periods_of_day(data_process.control_patient_byday)
 
+
+
     # EDA
     if generate_baseline_info:
         range_info = eda_baseline_date_range(control)
+        range_info_processed = eda_baseline_date_range(data_process.control_patient_byday)
 
     #graph of entire timeserie of a given person
     if show_timeseries_graph:
-        baseline_eda.graph_timeserie(patient)
+        #full dataset
+        baseline_eda.graph_timeserie_byid(control_patient, 'patient_1')
+        baseline_eda.graph_timeserie_byid(control_patient, 'control_7')
+
+        #day limit dataset
+        control_patient_byday = data_process.control_patient_byday
+        baseline_eda.graph_timeserie_byid(control_patient_byday, 'control_7')
+        baseline_eda.graph_timeserie_byid(control_patient_byday, 'patient_1')
+
         graph_patient_avg_by_hour(patient)
         graph_control_avg_by_hour(control)
         graph_activity_by_period(control)
+        graph_avg_activity_all_participants(control_patient)
 
 
     # dataset in time periods
@@ -676,6 +600,15 @@ if __name__ == '__main__':
     if export_baseline_to_csv:
         beda = baseline_eda.ExportBaseline()
         beda.generate_baseline_csv(join_baselines)
+
+    export_baseline_to_table_image = True
+    if export_baseline_to_table_image:
+        # m = control.get("control_1")['timeserie']
+        # m = m.head()
+        # dfi.export(m, 'output_images/control.png')
+
+        baseline_eda.create_df_table(join_baselines, "df_processed")
+        #baseline_eda.create_df_table(baseline_time_period, "df_processed_time_period")
 
 
 

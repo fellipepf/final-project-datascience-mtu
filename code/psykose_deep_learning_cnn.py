@@ -29,8 +29,9 @@ from keras.callbacks import EarlyStopping
 #my functions
 import log_configuration
 import my_metrics
-from psykose import LoadDataset, PreProcessing, eda_baseline_date_range
-
+from psykose import eda_baseline_date_range
+from psykose_dataset import LoadDataset
+from psykose_dataset import PreProcessing
 LOGGER = log_configuration.logger
 
 #for each user
@@ -177,7 +178,7 @@ def evaluate_cnn_model_2d(X_train, X_test, y_train, y_test):
     return accuracy
 
 
-def run_cnn_model_working(X_train, X_test, y_train, y_test):
+def run_cnn_model_1d(X_train, X_test, y_train, y_test):
     LOGGER.info("CNN model running...")
 
     verbose = 1
@@ -283,7 +284,7 @@ if __name__ == '__main__':
     #evaluate_ltsm_model(X_train, X_test, y_train, y_test)
     #evaluate_cnn_model(X_train, X_test, y_train, y_test)
 
-    history_fit, test_accuracy, model = run_cnn_model_working(X_train, X_test, y_train, y_test)
+    history_fit, test_accuracy, model = run_cnn_model_1d(X_train, X_test, y_train, y_test)
 
     time_elapsed = datetime.now() - start_time
     print('Time elapsed (hh:mm:ss.ms) {}'.format(time_elapsed))
