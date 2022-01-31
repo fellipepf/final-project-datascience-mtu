@@ -17,7 +17,7 @@ from collections import OrderedDict
 
 import seaborn as sns
 from tabulate import tabulate
-
+import matplotlib.ticker as ticker
 import baseline_eda
 import log_configuration
 from psykose_dataset import LoadDataset
@@ -28,6 +28,9 @@ import utils
 class Target(Enum):
     PATIENT = 1
     CONTROL = 0
+
+    def __eq__(self, b):
+        return self.value == b.value
 
 class CreateBaseline:
     def __init__(self, *args):
@@ -45,59 +48,63 @@ class PlotGraphs:
     def __init__(self, *args):
         pass
 
-'''
-This function reduce the dataset to the number of days for each person
-'''
-def process_dataset_byday(dataset):
-    dic_result = dict()
-    remove_fist_day = True
 
-    days_collected = DaysCollected()
-    days = days_collected.get_days_collected()
+# def process_dataset_byday(dataset):
+#     '''
+#     This function reduce the dataset to the number of days for each person
+#     '''
+#
+#     dic_result = dict()
+#     remove_fist_day = True
+#
+#     days_collected = DaysCollected()
+#     days = days_collected.get_days_collected()
+#
+#     for key in set(dataset.keys()).difference({'target'}):
+#         value = dataset[key]
+#
+#         df = value['timeserie']
+#         user_class = value['target']
+#
+#         df["datetime"] = pd.to_datetime(df["timestamp"])
+#         #group_day = df.groupby(df["datetime"].dt.day)['activity']
+#
+#         n_days_limit = days.loc[days['id'] == key]['days'].item()
+#         group_day = df.groupby(pd.Grouper(key='datetime', freq='D'))
+#
+#         if remove_fist_day:
+#             list_days = list(group_day)
+#
+#             #remove first day and
+#             # slice n number of elements defined
+#             group_n_days = list_days[1:n_days_limit +1]
+#         else:
+#             group_n_days = list(group_day)[:n_days_limit]
+#
+#         # get the second element from tuple in a list using comprehension list
+#         df_days = [tuple[1] for tuple in group_n_days]
+#
+#         #df_result.extend(group_n_days)
+#
+#         #transform list of dataframes to only one dataframe
+#         #df_all = pd.concat(df_days)
+#         #df_all['class'] = user_class
+#
+#         dic_result[key] = {}
+#         dic_result[key]['timeserie'] = df_days
+#         dic_result[key]['user_class'] = user_class
+#
+#     return dic_result
 
-    for key in set(dataset.keys()).difference({'target'}):
-        value = dataset[key]
 
-        df = value['timeserie']
-        user_class = value['target']
-
-        df["datetime"] = pd.to_datetime(df["timestamp"])
-        #group_day = df.groupby(df["datetime"].dt.day)['activity']
-
-        n_days_limit = days.loc[days['id'] == key]['days'].item()
-        group_day = df.groupby(pd.Grouper(key='datetime', freq='D'))
-
-        if remove_fist_day:
-            list_days = list(group_day)
-
-            #remove first day and
-            # slice n number of elements defined
-            group_n_days = list_days[1:n_days_limit +1]
-        else:
-            group_n_days = list(group_day)[:n_days_limit]
-
-        # get the second element from tuple in a list using comprehension list
-        df_days = [tuple[1] for tuple in group_n_days]
-
-        #df_result.extend(group_n_days)
-
-        #transform list of dataframes to only one dataframe
-        #df_all = pd.concat(df_days)
-        #df_all['class'] = user_class
-
-        dic_result[key] = {}
-        dic_result[key]['timeserie'] = df_days
-        dic_result[key]['user_class'] = user_class
-
-    return dic_result
-
-'''
-Generate a paper baseline
-    structure
-     userid - class - mean - sd - prop_zeros   -> day 1
-     userid - class - mean - sd - prop_zeros   -> day 2
-'''
 def generate_baseline(dataset):
+    '''
+    Generate a paper baseline - reproduced dataset
+        structure
+         userid - class - mean - sd - prop_zeros   -> day 1
+         userid - class - mean - sd - prop_zeros   -> day 2
+    '''
+
     df_stats = pd.DataFrame()
 
     col = DaysCollected()
@@ -160,12 +167,6 @@ def generate_baseline(dataset):
 
     return df_stats
 
-
-
-
-
-
-
 def graph_patient_avg_by_hour(patient):
     userid = "patient_1"
     df_patient = patient[userid]['timeserie']
@@ -180,6 +181,7 @@ def graph_patient_avg_by_hour(patient):
     plt.title(f"Average of activity by hour - {userid} ")
     plt.xlabel("Hour of the day");  # custom x label using matplotlib
     plt.ylabel("activity")
+    plt.grid()
     plt.show()
 
 def graph_control_avg_by_hour(control):
@@ -195,8 +197,9 @@ def graph_control_avg_by_hour(control):
     df_control.groupby(df_control["datetime"].dt.hour)["activity"].mean().plot(
         kind='line', rot=0, ax=axs)
     plt.title(f"Average of activity by hour - {userid} ")
-    plt.xlabel("Hour of the day");  # custom x label using matplotlib
-    plt.ylabel("activity");
+    plt.xlabel("Hour of the day")  # custom x label using matplotlib
+    plt.ylabel("activity")
+    plt.grid()
     plt.show()
 
 def caculate_mean_hour_all_participant(mean_hour):
@@ -243,14 +246,14 @@ def graph_avg_activity_all_participants(dataset):
     df_to_plot = pd.DataFrame()
     df_to_plot['control'] = mean_by_day_control['mean'].tolist()
     df_to_plot['patient'] = mean_by_day_patient['mean'].tolist()
-    import matplotlib.ticker as ticker
+
     #plt.figure(figsize=(20, 12))
     ax = sns.lineplot( data=df_to_plot)
     ax.xaxis.set_major_locator(ticker.MultipleLocator(2))
     plt.xlabel("Hour")
     plt.ylabel("Mean Activity")
     plt.title("Mean Activity by Hour of Patients and Control")
-
+    plt.grid()
     plt.show()
 
 def graph_activity_by_period(control):
@@ -283,11 +286,12 @@ New features
 
 
 def split_time_period(dataset):
-   # list_people = [dataset[key]['timeserie'] for key in dataset]
+    # list_people = [dataset[key]['timeserie'] for key in dataset]
     df_day_night = {}
+    dataset_byday = dataset.control_patient_byday
 
-    for key in set(dataset.keys()):
-        value = dataset[key]
+    for key in set(dataset_byday.keys()):
+        value = dataset_byday[key]
         # list with the serie by day
         list_tm = value['timeserie']
         user_class = value['user_class']
@@ -503,9 +507,10 @@ if __name__ == '__main__':
     logger = log_configuration.logger
 
     ##configuration
-    #todo add option to export reproduced_dataset and new_features_dataset /
+
     export_baseline_to_html = False
-    export_baseline_to_csv = False
+    export_reproduced_dataset_to_csv = False
+    export_new_features_dataset_to_csv = False
 
     # EDA
     show_timeseries_graph = True
@@ -518,15 +523,11 @@ if __name__ == '__main__':
     #print(control)
     control_patient = loadDataset.get_dataset_joined()
 
-
-
-
     data_process = PreProcessing(control, patient)
 
     baseline_eda.find_peak_above_avg(data_process.control_patient_byday)
     baseline_eda.plot_graph_one_day(data_process.control_patient_byday)
     baseline_eda.plot_graph_periods_of_day(data_process.control_patient_byday)
-
 
 
     # EDA
@@ -553,7 +554,7 @@ if __name__ == '__main__':
 
     # dataset in time periods
 
-    processed_dataset = process_dataset_byday(control_patient)
+    processed_dataset = PreProcessing(control_patient)
     df_time_period = split_time_period(processed_dataset)
     baseline_time_period = build_baseline_from_timeperiod(df_time_period)
     #df_day_night = stats_day_night(df_day_night)
@@ -565,7 +566,7 @@ if __name__ == '__main__':
             'morning_kurtosis', 'morning_skewness']
     baseline_eda.box_plot_simple(baseline_time_period, list_morning_values)
 
-    if export_baseline_to_csv:
+    if export_new_features_dataset_to_csv:
         expBaseline = baseline_eda.ExportBaseline()
         expBaseline.generate_baseline_csv(baseline_time_period, "baseline_time_period.csv")
 
@@ -576,7 +577,7 @@ if __name__ == '__main__':
     ####
 
     # Baseline
-    # create paper baseline
+    # create paper baseline - reproduced dataset
     baselineControl = generate_baseline(control)
     baselinePatient = generate_baseline(patient)
 
@@ -597,7 +598,7 @@ if __name__ == '__main__':
         #baseline_eda.eda_baseline_boxplot(join_baselines, utils.Feature.SKEW)
         baseline_eda.eda_baseline_boxplot_remove_outliers(join_baselines, utils.Feature.SKEW, True)
 
-    if export_baseline_to_csv:
+    if export_reproduced_dataset_to_csv:
         beda = baseline_eda.ExportBaseline()
         beda.generate_baseline_csv(join_baselines)
 
