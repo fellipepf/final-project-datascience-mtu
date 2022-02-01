@@ -16,7 +16,7 @@ data = asarray(data)
 data = data.reshape(1, 8, 8, 1)
 # create model
 model = Sequential()
-model.add(Conv2D(1, (3,3), strides=(2, 2), input_shape=(8, 8, 1)))
+model.add(Conv2D(2, (3,3), strides=(1, 1), input_shape=(8, 8, 1)))
 # summarize model
 model.summary()
 # define a vertical line detector
@@ -25,7 +25,9 @@ detector = [[[[0]],[[1]],[[0]]],
             [[[0]],[[1]],[[0]]]]
 weights = [asarray(detector), asarray([0.0])]
 # store the weights in the model
-model.set_weights(weights)
+#model.set_weights(weights)
+print(model.get_weights())
+
 # apply filter to input data
 yhat = model.predict(data)
 # enumerate rows

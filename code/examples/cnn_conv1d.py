@@ -1,12 +1,20 @@
-from numpy import asarray
+
 from keras.models import Sequential
 from keras.layers import Conv1D
 from keras.layers import Conv2D
+from keras.layers.convolutional import MaxPooling1D
+from keras.layers import Dense
+from keras.layers import Flatten
+from keras.layers import Dropout
+
+
+from numpy import asarray
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-
+#explanation about filters and kernel size
+#https://www.titanwolf.org/Network/q/a956e77e-2101-4482-9b52-bc9812442830/y
 def example_1():
     # 1 dimension with 1 feature
 
@@ -34,29 +42,39 @@ def example_1():
 def example_1_filters():
     # 1 dimension with 1 feature
 
-    data = np.array([9,7,2,4,8,7,3,1,5,9,8,4])
+    data = np.array([9, 7, 2, 4, 8, 7, 3, 1, 5, 9, 8, 4])
     data = data.reshape(1, 12, 1)
+    print(data)
 
     # define the kernel
-    #filter=1
-    #weights = np.array([1,3,6])
-    #weights = weights.reshape(3, 1, 1)
-    # filter=3
-    weights = np.array([ [[1,3,6]], [[1,3,6]],[[1,3,6]] ])
-    weights = weights.reshape(3, 1, 3)
+    # filter=1
+    # weights = np.array([1,3,6])
+    # weights = weights.reshape(3, 1, 1)
     bias = np.zeros((1,))  # 1 channel
-    bias = np.array([0.0 , 0.0, 0.0 ]) # 1 channel
+
+    # filter=4
+    weights = np.array([
+        [[1, 3, 6, 8]],
+        [[0, 1, 2, 3]],
+        [[1, 3, 6, 8]]])
+    weights = weights.reshape(3, 1, 4)
+    bias = np.array([0.0, 0.0, 0.0, 0.0])  # 1 channel
     print(bias)
 
     model = Sequential()
-    model.add(Conv1D(filters=3, kernel_size=3, input_shape=(12, 1)))
+    model.add(Conv1D(filters=4, kernel_size=3, input_shape=(12, 1)))
     # conv1d = Conv1D(input, kernel, strides=1, padding='SAME')
-    # #output_data = conv1d.convolution_op(input_data, kernel)
+    # output_data = conv1d.convolution_op(input_data, kernel)
 
-    # store the weights in the model
     model.set_weights([weights, bias])
 
     print(model.get_weights())
+
+    #Using Pooling layer
+    #model.add(MaxPooling1D(pool_size=2))
+    model.add(Flatten())
+    print(model.get_weights())
+
     yhat = model.predict(data)
     print(yhat)
 
