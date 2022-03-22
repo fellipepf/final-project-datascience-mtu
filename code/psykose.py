@@ -285,11 +285,14 @@ New features
 '''
 
 
-def split_time_period(dataset):
+def split_time_period(dataset, periods):
     # list_people = [dataset[key]['timeserie'] for key in dataset]
     df_day_night = {}
     dataset_byday = dataset.control_patient_byday
 
+    list_periods = periods.list_periods
+
+    #itetate participants
     for key in set(dataset_byday.keys()):
         value = dataset_byday[key]
         # list with the serie by day
@@ -301,38 +304,137 @@ def split_time_period(dataset):
         list_afternoon = list()
         list_evening = list()
 
-        for dftm in list_tm:
-            dftm.index = dftm['datetime']
+        days_concatenated = pd.concat(list_tm)
 
-            #from midnight to midday
-            morning = dftm.between_time('0:00', '6:59')
-            list_morning.append(morning)
+        #iterate days
+        #for dftm in list_tm:
+        days_concatenated.index = days_concatenated['datetime']
 
-            #this is one day range so after 23:59 is not in this period of time
-            afternoon = dftm.between_time('7:00', '19:00', include_start = True, include_end = False)
-            list_afternoon.append(afternoon)
+        for index, row in list_periods.iterrows():
+            period_name = row['period_name']
+            time_start = row['time_start']
+            time_finish = row['time_finish']
 
-            evening = dftm.between_time('19:00', '00:00', include_start = True, include_end = False)
-            list_evening.append(evening)
+            # from midnight to midday
+            period_values = days_concatenated.between_time(time_start, time_finish)
 
-        df_day_night[key]['morning'] = list_morning
-        df_day_night[key]['afternoon'] = list_afternoon
-        df_day_night[key]['evening'] = list_evening
+            period_values_by_day = period_values.groupby(pd.Grouper(key='datetime', freq='D'))
+            list_days = list(period_values_by_day)
+            list_df_days = [e[1] for e in list_days]
+            #
+            #         if remove_fist_day:
+            #             list_days = list(group_day)
+
+            # #from midnight to midday
+            # morning = days_concatenated.between_time('0:00', '6:59')
+            # list_morning.append(morning)
+            #
+            # #this is one day range so after 23:59 is not in this period of time
+            # afternoon = days_concatenated.between_time('7:00', '19:00', include_start = True, include_end = False)
+            # list_afternoon.append(afternoon)
+            #
+            # evening = days_concatenated.between_time('19:00', '00:00', include_start = True, include_end = False)
+            # list_evening.append(evening)
+
+            df_day_night[key][period_name] = list_df_days
+        #df_day_night[key]['afternoon'] = list_afternoon
+        #df_day_night[key]['evening'] = list_evening
         df_day_night[key]['user_class'] = user_class
 
     return df_day_night
 
-def build_baseline_from_timeperiod(df_day_night):
-    df_stats = pd.DataFrame()
 
-    for key in set(df_day_night.keys()):
-        value = df_day_night[key]
 
-        morning_df_list = value['morning']
-        afternoon_df_list = value['afternoon']
-        evening_df_list = value['evening']
+def build_baseline_from_timeperiod(df_periods_participants, periods_obj):
+    df_stats_result = pd.DataFrame()
 
-        user_class = value['user_class']
+
+    dict_stats_periods = dict()
+
+    #iterate DF of participants
+    for key in set(df_periods_participants.keys()):
+        periods = df_periods_participants[key]
+
+
+
+        #iterate periods - except the user class
+        list_day_values_per_period = dict()
+        for period in set(periods.keys()).difference({'user_class'}):
+            list_day_values_per_period = periods[period]
+            user_class = periods['user_class']
+
+            stats_of_periods = list()
+            for day_values in list_day_values_per_period:
+                stats = calculate_statistics(day_values)
+                stats_of_periods.append(stats)
+
+            dict_stats_periods[period] = stats_of_periods
+
+        #create output DF
+        #iterate stats values per periods
+        df_stats_user = pd.DataFrame()
+        for period_key in set(dict_stats_periods.keys()):
+            stat_period = dict_stats_periods[period_key]
+
+            df_stats_period = pd.DataFrame()
+            #iterate stats for each day
+            for stat_day in stat_period:
+                #vars(stat_period[0])
+                stat_values = vars(stat_day)
+
+                output_df_row = dict()
+                #iterate statistical values
+                for stat_value in stat_values:
+                    value = stat_values[stat_value]
+                    column_name = f"{period_key}_{stat_value}"
+                    output_df_row[column_name] = value
+
+                #concat columns
+                output_df_row = pd.DataFrame([output_df_row])
+                df_stats_period = pd.concat([
+                    df_stats_period,
+                    output_df_row
+                ])  #, axis=1
+
+            #concat rows
+            df_stats_user = pd.concat([
+                df_stats_user,
+                df_stats_period
+            ], axis=1)
+
+        df_stats_user['userid'] = key
+        df_stats_user['class'] = user_class.value
+
+        if df_stats_result.empty:
+            df_stats_result = df_stats_user
+        else:
+            df_stats_user = df_stats_user.reset_index(drop=True)
+            df_stats_result = df_stats_result.reset_index(drop=True)
+
+            df_stats_result = pd.concat([
+                df_stats_user,
+                df_stats_result
+            ], axis=0, ignore_index=True)
+
+    return df_stats_result
+
+
+
+
+
+
+
+'''
+
+
+
+        #using the periods object to get the values from df_day_night
+
+        morning_df_list = periods['morning']
+        afternoon_df_list = periods['afternoon']
+        evening_df_list = periods['evening']
+
+        user_class = periods['user_class']
 
         for morning, afternoon, evening in zip(morning_df_list, afternoon_df_list, evening_df_list):
             morning_mean, morning_sd, morning_prop_zero, morning_kurtosis, morning_skewness, morning_peaks, morning_max, morning_median, morning_mad = calculate_statistics(morning)
@@ -380,11 +482,12 @@ def build_baseline_from_timeperiod(df_day_night):
                          ]]
 
     return df_stats
-
+'''
         #df["datetime"] = pd.to_datetime(df["timestamp"])
         # group_day = df.groupby(df["datetime"].dt.day)['activity']
 
-
+def create_baseline_output():
+    pass
 
 def graph_peaks(serie_period_time):
     serie = serie_period_time["activity"].values
@@ -408,6 +511,8 @@ input:
 output:
 '''
 def calculate_statistics(daily_serie):
+    stats_values = dict()
+
     mean = daily_serie['activity'].mean()
     sd = np.std(daily_serie['activity'])
 
@@ -426,7 +531,11 @@ def calculate_statistics(daily_serie):
     x = daily_serie['activity']  # pd.Series()
     mad = (x - x.median()).abs().median()
 
-    return mean, sd, proportion_zero, kurtosis_value, skewness, count_peaks, max, median, mad
+    stats = StatisticalFeatures()
+    stats.add_stat_values(mean, sd, proportion_zero, kurtosis_value, skewness, count_peaks, max, median, mad )
+
+    return stats
+    #return mean, sd, proportion_zero, kurtosis_value, skewness, count_peaks, max, median, mad
 
 def stats_day_night(df_day_night):
     for key in set(df_day_night.keys()):
@@ -503,6 +612,32 @@ def eda_baseline_date_range(baseline):
     return df_stats
 
 
+class PeriodsOfDay:
+
+    list_periods = pd.DataFrame()
+
+    def add_period(self, period_name, time_start, time_finish):
+        period = dict()
+        period['period_name'] = period_name
+        period['time_start'] = time_start
+        period['time_finish'] = time_finish
+
+        PeriodsOfDay.list_periods = PeriodsOfDay.list_periods.append(period, ignore_index=True)
+
+class StatisticalFeatures:
+
+    def add_stat_values(self, mean, sd, prop_zero, kurtosis, skewness, peaks, max, median, mad):
+        self.mean = mean
+        self.sd = sd
+        self.prop_zero = prop_zero
+        self.kurtosis = kurtosis
+        self.skewness = skewness
+        self.peaks = peaks
+        self.max = max
+        self.median = median
+        self.mad = mad
+
+
 if __name__ == '__main__':
     logger = log_configuration.logger
 
@@ -510,10 +645,10 @@ if __name__ == '__main__':
 
     export_baseline_to_html = False
     export_reproduced_dataset_to_csv = False
-    export_new_features_dataset_to_csv = False
+    export_new_features_dataset_to_csv = True
 
     # EDA
-    show_timeseries_graph = True
+    show_timeseries_graph = False
     show_baseline_boxplot = False
     generate_baseline_info = False
 
@@ -553,10 +688,18 @@ if __name__ == '__main__':
 
 
     # dataset in time periods
+    periods = PeriodsOfDay()
+
+    #original division of time period
+    periods.add_period('morning', '0:00', '6:59')
+    periods.add_period('afternoon', '7:00', '19:00')
+    periods.add_period('evening', '19:00', '00:00')
+
+
 
     processed_dataset = PreProcessing(control_patient)
-    df_time_period = split_time_period(processed_dataset)
-    baseline_time_period = build_baseline_from_timeperiod(df_time_period)
+    df_time_period = split_time_period(processed_dataset, periods)
+    baseline_time_period = build_baseline_from_timeperiod(df_time_period, periods)
     #df_day_night = stats_day_night(df_day_night)
 
     baseline_eda.baseline_dimension(baseline_time_period)
@@ -568,7 +711,7 @@ if __name__ == '__main__':
 
     if export_new_features_dataset_to_csv:
         expBaseline = baseline_eda.ExportBaseline()
-        expBaseline.generate_baseline_csv(baseline_time_period, "baseline_time_period.csv")
+        expBaseline.generate_baseline_csv(baseline_time_period, "baseline_time_period_new.csv")
 
 
     # graphs for day night
