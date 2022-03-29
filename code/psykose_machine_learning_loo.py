@@ -28,6 +28,7 @@ from sklearn import metrics
 from sklearn.metrics import classification_report, log_loss
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import LeaveOneOut
+from sklearn.base import BaseEstimator
 
 # my functions
 import log_configuration
@@ -245,30 +246,23 @@ class Metric(enum.Enum):
 #Refactoring ML Models
 ###
 
-from sklearn.base import BaseEstimator
 class ModelStructure(BaseEstimator):
 
-    def __init__(self, name, estimator, params ):
-        """
-        A Custom BaseEstimator that can switch between classifiers.
-        :param estimator: sklearn object - The classifier
-        """
+    def __init__(self, name, model, params ):
+
         self.name = name
-        self.estimator = estimator
+        self.model = model
         self.params = params
 
     def fit(self, X, y=None, **kwargs):
-        self.estimator.fit(X, y)
+        self.model.fit(X, y)
         return self
 
     def predict(self, X, y=None):
-        return self.estimator.predict(X)
+        return self.model.predict(X)
 
     def predict_proba(self, X):
-        return self.estimator.predict_proba(X)[:,1]
-
-    def score(self, X, y):
-        return self.estimator.score(X, y)
+        return self.model.predict_proba(X)[:,1]
 
 
 #####
