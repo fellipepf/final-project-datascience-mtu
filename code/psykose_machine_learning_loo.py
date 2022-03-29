@@ -160,15 +160,73 @@ scaler = pp.StandardScaler(copy=True)
 dataX.loc[:, dataX.columns] = scaler.fit_transform(dataX[dataX.columns])
 
 
-testset_size = 0.33
+class TrainTestSets:
+    def __init__(self, x_train, x_test, y_train, y_test):
+        self.x_train = x_train
+        self.x_test = x_test
+        self.y_train = y_train
+        self.y_test = y_test
 
-X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
-    dataX,
-    dataY,
-    test_size=testset_size,
-    random_state=2019,
-    stratify=dataY   #keep the proportion of the classes for each subset
-)
+
+
+
+
+def holdout():
+    testset_size = 0.33
+    X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
+        dataX,
+        dataY,
+        test_size=testset_size,
+        random_state=2019,
+        stratify=dataY   #keep the proportion of the classes for each subset
+    )
+
+    train_test_sets = TrainTestSets(X_TRAIN, X_TEST, Y_TRAIN, Y_TEST)
+
+    return train_test_sets
+
+def get_userid_from_index(index):
+    users_list = data["userid"].unique()
+    return users_list[index]
+
+def get_content_fom_person(data, index):
+    userid = get_userid_from_index(index)
+    content = data.loc[data['userid'].isin(userid)]
+
+    dataX = data.copy().drop(["class", "class_str", "userid"], axis=1)
+    dataY = data["class"].copy()
+
+    return dataX, dataY
+
+
+
+def leave_one_patient_out():
+    list_traning_test_set = list()
+    data = load_dataset()
+
+
+    users_list = data["userid"].unique()
+    loo = LeaveOneOut()
+    loo.get_n_splits(users_list)
+
+    print(loo)
+    #LeaveOneOut()
+    for train_index, test_index in loo.split(users_list):
+        print("TRAIN:", train_index, "TEST:", test_index)
+        train_content_x, train_content_y = get_content_fom_person(data, train_index)
+        test_content_x, test_content_y = get_content_fom_person(data, test_index)
+
+        train_test_sets = TrainTestSets(train_content_x, test_content_x, train_content_y, test_content_y)
+
+        list_traning_test_set.append(train_test_sets)
+
+
+def create_training_test_sets(testset_size = 0.33, method = None ):
+    if method == "holdout":
+        train_test_sets = holdout()
+
+    if method == "lopo":
+        leave_one_patient_out()
 
 
 def plot_prc_curve(y_preds, y_trues, title=None):
@@ -748,6 +806,7 @@ def light_gbm(df_result_metrics, df_classification_report_loo, df_feature_import
     return df_result_metrics, df_classification_report_loo, df_feature_importance
 
 
+
 def check_options(*options):
     '''
     Verify if only one validation/split method is chosen
@@ -795,13 +854,15 @@ if __name__ == '__main__':
     read_result_df_saved = False
     check_options(run_hyper_tuning, run_models, read_result_df_saved)
 
+    create_training_test_sets(method="lopo")
+
     if run_hyper_tuning:
         LOGGER.info("Tuning models...")
         #hyper_tuning(model, param_grid)
         tuning.run_tuning(X_TRAIN, X_TEST, Y_TRAIN, Y_TEST)
         exit()
 
-    create_training_test_sets()
+
 
     # Data Frame to collect all results of the classifiers
     df_result_metrics = pd.DataFrame()
