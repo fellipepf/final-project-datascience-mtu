@@ -61,68 +61,6 @@ PATH_TO_FILE = "baseline_time_period.csv"
 LOGGER.info(f"Dataset selected: {PATH_TO_FILE}")
 
 
-_PARAMS_LORGREG = {
-    "penalty": "l2",
-    "C": 100,
-    "class_weight": "balanced",
-    "random_state": 2018,
-    "solver": "saga",
-    "n_jobs": 1
-}
-
-_PARAMS_RFC = {
-    "n_estimators": 200,
-    "max_features": "auto",
-    "max_depth": 100,
-    "min_samples_split": 8,
-    "min_samples_leaf": 5,
-    "min_weight_fraction_leaf": 0.0,
-    "max_leaf_nodes": 10,
-    "bootstrap": True,
-    "oob_score": False,
-    "n_jobs": -1,
-    "random_state": 2018,
-    "class_weight": "balanced"
-}
-
-_PARAMS_DTC = {
-    'criterion': 'entropy',
-    "max_features": 'sqrt',
-    "max_depth": 10,
-    "min_samples_split": 6,
-    "min_samples_leaf": 4,
-    "min_weight_fraction_leaf": 0.0,
-    "max_leaf_nodes": 12,
-    "random_state": 2018,
-    "class_weight": "balanced"
-
-}
-
-_PARAMS_XGB = {
-    "nthread": 16,
-    "learning_rate": 0.3,
-    "gamma": 0,
-    "max_depth": 7,
-    "verbosity": 0,
-    "min_child_weight": 3,
-    "max_delta_step": 0,
-    "subsample": 0.5,
-    "colsample_bytree": 0.7,
-    "objective": "binary:logistic",
-    "num_class": 1,
-    "eval_metric": "logloss",
-    "seed": 2018,
-}
-
-_PARAMS_LIGHTGB = {
-    "task": "train",
-    "num_class": 1,
-    "boosting": "gbdt",
-    "verbosity": -1,
-    "objective": "binary", "metric": "binary_logloss", "metric_freq": 50, "is_training_metric": False,
-    "max_depth": 4, "num_leaves": 31, "learning_rate": 0.1, "feature_fraction": 0.8, "bagging_fraction": 0.8,
-    "bagging_freq": 0, "bagging_seed": 2018, "num_threads": 16
-}
 
 
 
@@ -186,7 +124,10 @@ def get_content_fom_person(data, index):
 
     return dataX, dataY
 
-
+def scale_data(dataX):
+    scaler = pp.StandardScaler(copy=True)
+    dataX.loc[:, dataX.columns] = scaler.fit_transform(dataX[dataX.columns])
+    return dataX
 
 def leave_one_patient_out():
     list_traning_test_set = list()
@@ -254,6 +195,8 @@ class ModelStructure(BaseEstimator):
         self.model = model
         self.params = params
 
+        #self.model.set_params(**params)
+
     def fit(self, X, y=None, **kwargs):
         self.model.fit(X, y)
         return self
@@ -267,7 +210,94 @@ class ModelStructure(BaseEstimator):
 
 #####
 
+def get_parameters():
 
+
+    _PARAMS_LOGREG = {
+        "penalty": "l2",
+        "C": 100,
+        "class_weight": "balanced",
+        "random_state": 2018,
+        "solver": "saga",
+        "n_jobs": 1
+    }
+
+    _PARAMS_RFC = {
+        "n_estimators": 200,
+        "max_features": "auto",
+        "max_depth": 100,
+        "min_samples_split": 8,
+        "min_samples_leaf": 5,
+        "min_weight_fraction_leaf": 0.0,
+        "max_leaf_nodes": 10,
+        "bootstrap": True,
+        "oob_score": False,
+        "n_jobs": -1,
+        "random_state": 2018,
+        "class_weight": "balanced"
+    }
+
+    _PARAMS_DTC = {
+        'criterion': 'entropy',
+        "max_features": 'sqrt',
+        "max_depth": 10,
+        "min_samples_split": 6,
+        "min_samples_leaf": 4,
+        "min_weight_fraction_leaf": 0.0,
+        "max_leaf_nodes": 12,
+        "random_state": 2018,
+        "class_weight": "balanced"
+
+    }
+
+    _PARAMS_XGB = {
+        "nthread": 16,
+        "learning_rate": 0.3,
+        "gamma": 0,
+        "max_depth": 7,
+        "verbosity": 0,
+        "min_child_weight": 3,
+        "max_delta_step": 0,
+        "subsample": 0.5,
+        "colsample_bytree": 0.7,
+        "objective": "binary:logistic",
+        "num_class": 1,
+        "eval_metric": "logloss",
+        "seed": 2018,
+    }
+
+    _PARAMS_LIGHTGB = {
+        "task": "train",
+        "num_class": 1,
+        "boosting": "gbdt",
+        "verbosity": -1,
+        "objective": "binary", "metric": "binary_logloss", "metric_freq": 50, "is_training_metric": False,
+        "max_depth": 4, "num_leaves": 31, "learning_rate": 0.1, "feature_fraction": 0.8, "bagging_fraction": 0.8,
+        "bagging_freq": 0, "bagging_seed": 2018, "num_threads": 16
+    }
+
+    params_dic = {}
+    params_dic['LR'] = _PARAMS_LOGREG
+    params_dic['RF'] = _PARAMS_RFC
+    params_dic['DT'] = _PARAMS_DTC
+    params_dic['XB'] = _PARAMS_XGB
+    params_dic['LG'] = _PARAMS_LIGHTGB
+
+    return params_dic
+
+
+def get_models():
+    models = dict()
+
+    params = get_parameters()
+
+    #models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
+    #models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
+    #models['DT'] = (ModelStructure("Random Forest", DecisionTreeClassifier(), ""))
+    models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
+    #models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
+
+    return models
 
 def check_options(*options):
     '''
@@ -318,16 +348,24 @@ if __name__ == '__main__':
     #result_loo['user'] = None
     dict_result_user = dict()
 
-    models = list()
-    models.append(ModelStructure("Logistic Regression", LogisticRegression(), ""))
-    models.append(ModelStructure("Random Forest", RandomForestClassifier(), ""))
+    #models = list()
+    #models.append(ModelStructure("Logistic Regression", LogisticRegression(), ""))
+    #models.append(ModelStructure("Random Forest", RandomForestClassifier(), ""))
+    #models.append(ModelStructure("XGBoost", xgb.XGBClassifier(), ""))
+    #models.append(ModelStructure("LightGBM", lgb.LGBMClassifier(), ""))
+
+    models = get_models()
 
     # iterate models
-    for model in models:
+    for key, model in models.items():
         LOGGER.info(f"{model.name}")
+
         # iterate each person on test set
         list_acc = list()
         for train_test_set in train_test_sets:
+            #doubt: use the same instance of the model for each observation ?
+            model = models.get(key)
+
             model.fit(train_test_set.x_train, train_test_set.y_train)
             y_test_preds = model.predict_proba(train_test_set.x_test)
 
