@@ -20,6 +20,7 @@ from sklearn.tree import DecisionTreeClassifier
 import xgboost as xgb
 from xgboost import plot_importance
 import lightgbm as lgb
+from catboost import Pool, CatBoostClassifier
 
 #scikit-learn
 from sklearn import preprocessing as pp
@@ -294,8 +295,9 @@ def get_models():
     #models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
     #models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
     #models['DT'] = (ModelStructure("Random Forest", DecisionTreeClassifier(), ""))
-    models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
+    #models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
     #models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
+    models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
 
     return models
 
