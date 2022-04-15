@@ -292,14 +292,68 @@ def get_models():
 
     params = get_parameters()
 
-    #models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
-    #models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
+    models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
+    models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
     #models['DT'] = (ModelStructure("Random Forest", DecisionTreeClassifier(), ""))
-    #models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
+    models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
     #models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
-    models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
+    #models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
 
     return models
+
+def run_ml_models(models):
+    result_df_loo = pd.DataFrame()
+    # iterate models
+    for key, model in models.items():
+        LOGGER.info(f"{model.name}")
+
+        # iterate each person on test set
+        list_acc = list()
+        for train_test_set in train_test_sets:
+            #doubt: use the same instance of the model for each observation ?
+            model = models.get(key)
+
+            model.fit(train_test_set.x_train, train_test_set.y_train)
+            y_test_preds = model.predict_proba(train_test_set.x_test)
+
+            acc = train_test_set.calc_metrics(y_test_preds).accuracy()
+            LOGGER.info(f"{model.name} - {train_test_set.id_person_out} - acc: {acc}")
+            #dict_result_user[train_test_set.id_person_out] = acc
+            list_acc.append(acc)
+
+        result_loo[model.name] = np.mean(list_acc)
+
+        result_dict = dict()
+        result_dict['model'] = model.name
+        result_dict['mean'] = np.mean(list_acc)
+        result_dict['sd'] = np.std(list_acc)
+
+        result_df_loo = result_df_loo.append(result_dict, ignore_index=True)
+
+    #print(result_loo)
+    print(result_df_loo)
+
+def run_ensemble_models(models):
+    # iterate models
+    for key, model in models.items():
+        LOGGER.info(f"{model.name}")
+
+        # iterate each person on test set
+        list_acc = list()
+        for train_test_set in train_test_sets:
+            # doubt: use the same instance of the model for each observation ?
+            model = models.get(key)
+
+            model.fit(train_test_set.x_train, train_test_set.y_train)
+            y_test_preds = model.predict_proba(train_test_set.x_test)
+
+            acc = train_test_set.calc_metrics(y_test_preds).accuracy()
+            LOGGER.info(f"{model.name} - {train_test_set.id_person_out} - acc: {acc}")
+            # dict_result_user[train_test_set.id_person_out] = acc
+            list_acc.append(acc)
+
+        result_loo[model.name] = np.mean(list_acc)
+    print(result_loo)
 
 def check_options(*options):
     '''
@@ -358,24 +412,10 @@ if __name__ == '__main__':
 
     models = get_models()
 
-    # iterate models
-    for key, model in models.items():
-        LOGGER.info(f"{model.name}")
+    run_ml_models(models)
 
-        # iterate each person on test set
-        list_acc = list()
-        for train_test_set in train_test_sets:
-            #doubt: use the same instance of the model for each observation ?
-            model = models.get(key)
+    #run_ensemble_models(models)
 
-            model.fit(train_test_set.x_train, train_test_set.y_train)
-            y_test_preds = model.predict_proba(train_test_set.x_test)
 
-            acc = train_test_set.calc_metrics(y_test_preds).accuracy()
-            LOGGER.info(f"{model.name} - {train_test_set.id_person_out} - acc: {acc}")
-            #dict_result_user[train_test_set.id_person_out] = acc
-            list_acc.append(acc)
 
-        result_loo[model.name] = np.mean(list_acc)
 
-    print(result_loo)
