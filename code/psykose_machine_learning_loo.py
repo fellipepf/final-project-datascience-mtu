@@ -5,6 +5,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 import pprint
 from tabulate import tabulate
@@ -21,6 +22,7 @@ import xgboost as xgb
 from xgboost import plot_importance
 import lightgbm as lgb
 from catboost import Pool, CatBoostClassifier
+from sklearn.ensemble import VotingClassifier
 
 #scikit-learn
 from sklearn import preprocessing as pp
@@ -292,12 +294,12 @@ def get_models():
 
     params = get_parameters()
 
-    models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
-    models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
+    #models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
+    #models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
     #models['DT'] = (ModelStructure("Random Forest", DecisionTreeClassifier(), ""))
     models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
-    #models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
-    #models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
+    models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
+    models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
 
     return models
 
@@ -334,26 +336,39 @@ def run_ml_models(models):
     print(result_df_loo)
 
 def run_ensemble_models(models):
-    # iterate models
-    for key, model in models.items():
-        LOGGER.info(f"{model.name}")
+    result_df_loo = pd.DataFrame()
+    # iterate each person on test set
+    list_acc = list()
+    for train_test_set in train_test_sets:
+        # doubt: use the same instance of the model for each observation ?
 
-        # iterate each person on test set
-        list_acc = list()
-        for train_test_set in train_test_sets:
-            # doubt: use the same instance of the model for each observation ?
-            model = models.get(key)
+        models_list = [(key,value.model) for key,value in models.items()]
 
-            model.fit(train_test_set.x_train, train_test_set.y_train)
-            y_test_preds = model.predict_proba(train_test_set.x_test)
+        voting = VotingClassifier(estimators=models_list,
+                                    voting='soft', weights=[1, 2, 1])
 
-            acc = train_test_set.calc_metrics(y_test_preds).accuracy()
-            LOGGER.info(f"{model.name} - {train_test_set.id_person_out} - acc: {acc}")
-            # dict_result_user[train_test_set.id_person_out] = acc
-            list_acc.append(acc)
+        voting.fit(train_test_set.x_train, train_test_set.y_train)
+        y_test_preds = voting.predict_proba(train_test_set.x_test)
 
-        result_loo[model.name] = np.mean(list_acc)
-    print(result_loo)
+        y_test_preds_arg = np.argmax(y_test_preds, axis=1)
+
+        acc = train_test_set.calc_metrics(y_test_preds_arg).accuracy()
+        #result = confusion_matrix(list(y_test.values), y_test_preds)
+        # dict_result_user[train_test_set.id_person_out] = acc
+        list_acc.append(acc)
+
+    result_loo["voting"] = np.mean(list_acc)
+
+    result_dict = dict()
+    result_dict['model'] = "voting"
+    result_dict['mean'] = np.mean(list_acc)
+    result_dict['sd'] = np.std(list_acc)
+
+    result_df_loo = result_df_loo.append(result_dict, ignore_index=True)
+
+
+    # print(result_loo)
+    print(result_df_loo)
 
 def check_options(*options):
     '''
@@ -412,9 +427,9 @@ if __name__ == '__main__':
 
     models = get_models()
 
-    run_ml_models(models)
+    #run_ml_models(models)
 
-    #run_ensemble_models(models)
+    run_ensemble_models(models)
 
 
 
