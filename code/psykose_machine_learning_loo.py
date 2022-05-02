@@ -294,17 +294,71 @@ def get_models():
 
     params = get_parameters()
 
-    #models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
-    #models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
-    #models['DT'] = (ModelStructure("Random Forest", DecisionTreeClassifier(), ""))
-    models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
-    models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
-    models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
+    models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
+    models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
+    #models['DT'] = (ModelStructure("Decision Tree", DecisionTreeClassifier(), ""))
+    #models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
+    #models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
+    #models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
 
     return models
 
+
+def get_class_person(id):
+    result = id.split("_")[0]
+    return result
+
+def get_dict_result_person(model, id, acc_value ):
+    result = dict()
+    result['model'] = model
+    result['id'] = id
+    result['person_class'] = get_class_person(id)
+    result['acc'] = acc_value
+
+    return result
+
+def calc_stats(df_class_person, class_name, model_name):
+    mean_acc = df_class_person[["acc"]].mean()
+    #print(f' mean acc: {mean_acc}')
+
+    result = dict()
+    result["model"] = model_name
+    result["class"] = class_name
+    result['acc'] = mean_acc[0]
+    return result
+
+
+
+def show_results_per_class(results_per_class):
+    result_df = pd.DataFrame()
+    models = results_per_class["model"].unique()
+
+    for model in models:
+        print(model)
+
+        control = results_per_class.loc[(results_per_class['person_class'] == 'control') & (results_per_class['model'] == model) ]
+        patient = results_per_class.loc[(results_per_class['person_class'] == 'patient') & (results_per_class['model'] == model)]
+
+        #control
+        print(f"Control")
+        print(f"Control: {len(control)}")
+        control_stats = calc_stats(control, "control", model)
+        result_df = result_df.append(control_stats, ignore_index=True)
+
+        #patient
+        print(f"Patient")
+        print(f" : {len(patient)}")
+        patient_stats = calc_stats(patient, "patient", model)
+        result_df = result_df.append(patient_stats, ignore_index=True)
+
+        print(result_df)
+
+
+
+
 def run_ml_models(models):
     result_df_loo = pd.DataFrame()
+    result_df_lopo_per_person = pd.DataFrame()
     # iterate models
     for key, model in models.items():
         LOGGER.info(f"{model.name}")
@@ -323,6 +377,10 @@ def run_ml_models(models):
             #dict_result_user[train_test_set.id_person_out] = acc
             list_acc.append(acc)
 
+            result_person = get_dict_result_person(model.name, train_test_set.id_person_out, acc )
+            result_df_lopo_per_person = result_df_lopo_per_person.append(result_person, ignore_index=True)
+
+
         result_loo[model.name] = np.mean(list_acc)
 
         result_dict = dict()
@@ -333,6 +391,7 @@ def run_ml_models(models):
         result_df_loo = result_df_loo.append(result_dict, ignore_index=True)
 
     #print(result_loo)
+    show_results_per_class(result_df_lopo_per_person)
     print(result_df_loo)
 
 def run_ensemble_models(models):
@@ -345,7 +404,8 @@ def run_ensemble_models(models):
         models_list = [(key,value.model) for key,value in models.items()]
 
         voting = VotingClassifier(estimators=models_list,
-                                    voting='soft', weights=[1, 2, 1])
+                                  voting='soft',
+                                  weights=[1, 1, 1])
 
         voting.fit(train_test_set.x_train, train_test_set.y_train)
         y_test_preds = voting.predict_proba(train_test_set.x_test)
@@ -369,6 +429,9 @@ def run_ensemble_models(models):
 
     # print(result_loo)
     print(result_df_loo)
+    
+def results_per_class():
+    pass
 
 def check_options(*options):
     '''
@@ -427,9 +490,9 @@ if __name__ == '__main__':
 
     models = get_models()
 
-    #run_ml_models(models)
+    run_ml_models(models)
 
-    run_ensemble_models(models)
+    #run_ensemble_models(models)
 
 
 
