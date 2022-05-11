@@ -33,6 +33,8 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import LeaveOneOut
 from sklearn.base import BaseEstimator
 
+from sklearn.decomposition import PCA
+
 # my functions
 import log_configuration
 import my_metrics
@@ -96,6 +98,12 @@ class TrainTestSets:
         model_metrics = my_metrics.ModelMetrics(self.y_test, y_test_predicted)
         return model_metrics
 
+    def is_patient(self):
+        return get_class_person(self.id_person_out) == "patient"
+
+
+    def person_class(self):
+        return get_class_person(self.id_person_out)
 
 
 
@@ -308,23 +316,37 @@ def get_class_person(id):
     result = id.split("_")[0]
     return result
 
-def get_dict_result_person(model, id, acc_value ):
+def get_dict_result_person(model, id, acc_value, precision_value, wa_precision, mcc ):
+
+
     result = dict()
     result['model'] = model
     result['id'] = id
     result['person_class'] = get_class_person(id)
     result['acc'] = acc_value
+    result['precision'] = precision_value
+    result['weighted average'] = wa_precision
+    result['mcc'] = mcc
 
     return result
 
 def calc_stats(df_class_person, class_name, model_name):
     mean_acc = df_class_person[["acc"]].mean()
+    mean_precision = df_class_person[["precision"]].mean()
+
+    wa_mean = df_class_person[['weighted average']].mean()
+    mcc_mean = df_class_person[['mcc']].mean()
     #print(f' mean acc: {mean_acc}')
 
+    #columns output
     result = dict()
     result["model"] = model_name
     result["class"] = class_name
     result['acc'] = mean_acc[0]
+    result['precision'] = mean_precision[0]
+    result['mcc'] = mcc_mean[0]
+
+
     return result
 
 
@@ -339,6 +361,8 @@ def show_results_per_class(results_per_class):
         control = results_per_class.loc[(results_per_class['person_class'] == 'control') & (results_per_class['model'] == model) ]
         patient = results_per_class.loc[(results_per_class['person_class'] == 'patient') & (results_per_class['model'] == model)]
 
+        weigthed_average_ds = results_per_class.loc[(results_per_class['model'] == model)]
+
         #control
         print(f"Control")
         print(f"Control: {len(control)}")
@@ -349,6 +373,10 @@ def show_results_per_class(results_per_class):
         print(f"Patient")
         print(f" : {len(patient)}")
         patient_stats = calc_stats(patient, "patient", model)
+        result_df = result_df.append(patient_stats, ignore_index=True)
+
+        print(f"weighted average")
+        patient_stats = calc_stats(weigthed_average_ds, "weighted average", model)
         result_df = result_df.append(patient_stats, ignore_index=True)
 
         print(result_df)
@@ -373,11 +401,26 @@ def run_ml_models(models):
             y_test_preds = model.predict_proba(train_test_set.x_test)
 
             acc = train_test_set.calc_metrics(y_test_preds).accuracy()
+
+            if train_test_set.is_patient():
+                precision = train_test_set.calc_metrics(y_test_preds).classification_report().get('1.0').get('precision')
+            else:
+                precision = train_test_set.calc_metrics(y_test_preds).classification_report().get('0.0').get('precision')
+
+            mcc = train_test_set.calc_metrics(y_test_preds).matthews_corrcoef()
+
+
+            wa_precision =  train_test_set.calc_metrics(y_test_preds).classification_report().get('weighted avg').get('precision')
+            wa_recall = train_test_set.calc_metrics(y_test_preds).classification_report().get('weighted avg').get('recall')
+            wa_f1 = train_test_set.calc_metrics(y_test_preds).classification_report().get('weighted avg').get('f1-score')
+
+
+
             LOGGER.info(f"{model.name} - {train_test_set.id_person_out} - acc: {acc}")
             #dict_result_user[train_test_set.id_person_out] = acc
             list_acc.append(acc)
 
-            result_person = get_dict_result_person(model.name, train_test_set.id_person_out, acc )
+            result_person = get_dict_result_person(model.name, train_test_set.id_person_out, acc, precision, wa_precision, mcc)
             result_df_lopo_per_person = result_df_lopo_per_person.append(result_person, ignore_index=True)
 
 
@@ -430,8 +473,11 @@ def run_ensemble_models(models):
     # print(result_loo)
     print(result_df_loo)
     
-def results_per_class():
-    pass
+def pca_feature_elimination(train_test_sets):
+
+    pca = PCA(n_components=2)
+    X_train = pca.fit_transform(X_train)
+    X_test = pca.transform(X_test)
 
 def check_options(*options):
     '''
@@ -469,14 +515,18 @@ def load_dataframe(name=None):
 if __name__ == '__main__':
     LOGGER.info("Script started...")
 
-
-
     run_hyper_tuning = False
     run_models = True
     read_result_df_saved = False
     check_options(run_hyper_tuning, run_models, read_result_df_saved)
 
+    use_pca = False
+
     train_test_sets = create_training_test_sets(method="lopo")
+
+    if use_pca:
+        pca_feature_elimination(train_test_sets)
+
 
     result_loo = dict()
     #result_loo['user'] = None
@@ -493,6 +543,8 @@ if __name__ == '__main__':
     run_ml_models(models)
 
     #run_ensemble_models(models)
+
+
 
 
 
