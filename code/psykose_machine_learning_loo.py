@@ -303,10 +303,10 @@ def get_models():
     params = get_parameters()
 
     models['LR'] = (ModelStructure("Logistic Regression", LogisticRegression(**params.get('LR')), ""))
-    models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(), ""))
-    #models['DT'] = (ModelStructure("Decision Tree", DecisionTreeClassifier(), ""))
-    #models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
-    #models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
+    models['RF'] = (ModelStructure("Random Forest", RandomForestClassifier(**params.get('RF')), ""))
+    models['DT'] = (ModelStructure("Decision Tree", DecisionTreeClassifier(**params.get('DT')), ""))
+    models['XB'] = (ModelStructure("XGBoost", xgb.XGBClassifier(**params.get('XB')), ""))
+    models['LG'] = (ModelStructure("LightGBM", lgb.LGBMClassifier(**params.get('LG')), ""))
     #models['CB'] = (ModelStructure("CatBoost", CatBoostClassifier(), ""))
 
     return models
@@ -316,7 +316,7 @@ def get_class_person(id):
     result = id.split("_")[0]
     return result
 
-def get_dict_result_person(model, id, acc_value, precision_value, wa_precision, mcc ):
+def get_dict_result_person(model, id, acc_value, precision,recall, f1_score, mcc, wa_precision, wa_recall, wa_f1 ):
 
 
     result = dict()
@@ -324,18 +324,29 @@ def get_dict_result_person(model, id, acc_value, precision_value, wa_precision, 
     result['id'] = id
     result['person_class'] = get_class_person(id)
     result['acc'] = acc_value
-    result['precision'] = precision_value
-    result['weighted average'] = wa_precision
+    result['precision'] = precision
+    result['recall'] = recall
+    result['f1_score'] = f1_score
     result['mcc'] = mcc
+
+    result['wa_precision'] = wa_precision
+    result['wa_recall'] = wa_recall
+    result['wa_f1'] = wa_f1
+
 
     return result
 
 def calc_stats(df_class_person, class_name, model_name):
     mean_acc = df_class_person[["acc"]].mean()
     mean_precision = df_class_person[["precision"]].mean()
-
-    wa_mean = df_class_person[['weighted average']].mean()
+    mean_recall = df_class_person[["recall"]].mean()
+    mean_f1_score = df_class_person[["f1_score"]].mean()
     mcc_mean = df_class_person[['mcc']].mean()
+
+    wa_precision = df_class_person[['wa_precision']].mean()
+    wa_recall = df_class_person[['wa_recall']].mean()
+    wa_f1 = df_class_person[['wa_f1']].mean()
+
     #print(f' mean acc: {mean_acc}')
 
     #columns output
@@ -344,7 +355,16 @@ def calc_stats(df_class_person, class_name, model_name):
     result["class"] = class_name
     result['acc'] = mean_acc[0]
     result['precision'] = mean_precision[0]
-    result['mcc'] = mcc_mean[0]
+    result['recall'] = mean_recall[0]
+    result['f1_score'] = mean_f1_score[0]
+    #result['mcc'] = mcc_mean[0]
+
+    if class_name == "weighted average":
+        result['precision'] = wa_precision[0]
+        result['recall'] = wa_recall[0]
+        result['f1_score'] = wa_f1[0]
+
+
 
 
     return result
@@ -379,7 +399,8 @@ def show_results_per_class(results_per_class):
         patient_stats = calc_stats(weigthed_average_ds, "weighted average", model)
         result_df = result_df.append(patient_stats, ignore_index=True)
 
-        print(result_df)
+        #print(result_df)
+        print(tabulate(result_df, headers='keys', tablefmt='psql'))
 
 
 
@@ -407,6 +428,8 @@ def run_ml_models(models):
             else:
                 precision = train_test_set.calc_metrics(y_test_preds).classification_report().get('0.0').get('precision')
 
+            recall = train_test_set.calc_metrics(y_test_preds).recall(average='micro')
+            f1_score = train_test_set.calc_metrics(y_test_preds).f1_score(average='micro')
             mcc = train_test_set.calc_metrics(y_test_preds).matthews_corrcoef()
 
 
@@ -420,8 +443,9 @@ def run_ml_models(models):
             #dict_result_user[train_test_set.id_person_out] = acc
             list_acc.append(acc)
 
-            result_person = get_dict_result_person(model.name, train_test_set.id_person_out, acc, precision, wa_precision, mcc)
-            result_df_lopo_per_person = result_df_lopo_per_person.append(result_person, ignore_index=True)
+            #TODO pack this variables into dict
+            result_person_dict = get_dict_result_person(model.name, train_test_set.id_person_out, acc, precision,recall, f1_score, mcc, wa_precision, wa_recall, wa_f1)
+            result_df_lopo_per_person = result_df_lopo_per_person.append(result_person_dict, ignore_index=True)
 
 
         result_loo[model.name] = np.mean(list_acc)
