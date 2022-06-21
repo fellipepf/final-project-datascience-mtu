@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn import metrics
+from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, precision_recall_fscore_support, \
     classification_report, matthews_corrcoef
 
@@ -13,7 +14,7 @@ class ModelMetrics:
         return accuracy_score(self.y_true, self.y_preds.round())
 
     def precision(self):
-        return precision_score(self.y_true, self.y_preds.round(), average=None)
+        return precision_score(self.y_true, self.y_preds.round(), average="binary")
 
     def average_precision_score(self):
         '''
@@ -22,11 +23,11 @@ class ModelMetrics:
         '''
         return metrics.average_precision_score(self.y_true, self.y_preds)
 
-    def recall(self):
-        return recall_score(self.y_true, self.y_preds.round())
+    def recall(self, average= "binary"):
+        return recall_score(self.y_true, self.y_preds.round(), average = average)
 
-    def f1_score(self):
-        return f1_score(self.y_true, self.y_preds.round())
+    def f1_score(self, average= "binary"):
+        return f1_score(self.y_true, self.y_preds.round(), average = average)
 
     def precision_recall_fscore_support(self):
         return precision_recall_fscore_support(self.y_true, self.y_preds.round())
@@ -44,6 +45,14 @@ class ModelMetrics:
 
     def matthews_corrcoef(self, round=None):
         return matthews_corrcoef(self.y_true, self.y_preds.round())
+
+    def confusion_matrix_rates(self):
+        tn, fp, fn, tp = confusion_matrix(self.y_true, self.y_preds.round(), normalize='all').ravel()
+        return tn, fp, fn, tp
+
+    def confusion_matrix(self):
+        return confusion_matrix(self.y_true, self.y_preds.round())
+
 
     #may can cause error
     def all_metrics(self):

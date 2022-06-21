@@ -38,7 +38,7 @@ from keras.models import load_model
 #my functions
 import log_configuration
 import my_metrics
-from psykose import eda_baseline_date_range
+from psykose_eda import eda_baseline_date_range
 from psykose_dataset_6 import LoadDataset
 from psykose_dataset_6 import PreProcessing
 from CNN_2d_AD1_1 import cnn_2D
@@ -190,6 +190,7 @@ def model_predict_lpgo(df_dataset, shuffle=True, random_state=2018):
                 val_persons.append(p)
 
         x_train = np.expand_dims(x_train[1:],-1)
+        x_train = np.asarray(x_train).astype(np.float32)
         y_train = pd.Series(y_train)
         y_train = y_train.astype(pd.CategoricalDtype(categories=possible_categories))
         y_train = np.asarray(pd.get_dummies(y_train), dtype=np.float32)
@@ -209,6 +210,7 @@ def model_predict_lpgo(df_dataset, shuffle=True, random_state=2018):
         plot_name_here = 'plot_person_v6_1_cnn2d' +str(label) + str(person)
         result_plot(history_fit, plot_name=plot_name_here)
 
+        x_test = np.asarray(x_test).astype(np.float32)
         y_predicted = model.predict(x_test)
         y_predicted_arg = movingaverage(model.predict(x_test)[:,1], window_size)
         y_predicted_arg2 = np.argmax(y_predicted, axis=1)
@@ -220,11 +222,13 @@ def model_predict_lpgo(df_dataset, shuffle=True, random_state=2018):
 
         modelMetrics = my_metrics.ModelMetrics(y_test_arg, y_predicted_arg)
         modelMetrics2 = my_metrics.ModelMetrics(y_test_arg, y_predicted_arg2)
-        # metric_mattews_coef = modelMetrics.matthews_corrcoef()
-        # f1_score = modelMetrics.f1_score()
+        #metric_mattews_coef = modelMetrics.matthews_corrcoef()
+        f1_score = modelMetrics.f1_score(average='weighted')
         accuracy = modelMetrics.accuracy()
         accuracy_nmov = modelMetrics2.accuracy()
 
+        #print(f" test metrics mcc: {metric_mattews_coef}")
+        print(f" test metrics f1_score: {f1_score}")
         print(f" test metrics acc_mov: {accuracy}")
         print(f" test metrics acc_no_mov: {accuracy_nmov}")
         print(f" test metrics acc_eval: {test_accuracy}")
@@ -242,7 +246,7 @@ def run_cnn_model_2d(X_train, X_test, y_train, y_test, person):
     LOGGER.info("CNN model running...")
 
     verbose = 2
-    epochs = 30
+    epochs = 2
     batch_size = 32
     kernel = (3,2)
 
@@ -271,6 +275,22 @@ def run_cnn_model_2d(X_train, X_test, y_train, y_test, person):
     return history_fit, test_accuracy, saved_model, batch_size
 
 
+def folder_to_save_plots():
+    '''
+    Fellipe
+
+    :return:
+    '''
+
+    folder = './Plots/'
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+        return folder
+    else:
+        return folder
+
+
+
 def result_plot(history, plot_name='test'):
     print(history.history.keys())
     # plot loss during training
@@ -288,7 +308,8 @@ def result_plot(history, plot_name='test'):
     pyplot.plot(history.history['val_accuracy'], label='test')
     pyplot.legend()
     # pyplot.show()
-    plot_str = './Plots/' + str(plot_name) + '.png'
+    folder = folder_to_save_plots()
+    plot_str = folder + str(plot_name) + '.png'
     plt.savefig(plot_str)
     plt.clf()
 
