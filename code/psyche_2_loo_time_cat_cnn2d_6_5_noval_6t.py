@@ -14,6 +14,8 @@ from matplotlib import pyplot, pyplot as plt
 from numpy import dstack
 from scipy import stats
 
+from tabulate import tabulate
+
 # cnn model
 from tensorflow import keras
 import tensorflow as tf
@@ -134,6 +136,110 @@ def create_time_window(df_dataset):
 
     return reshaped_segments, labels
 
+## begin - metrics
+
+class PredictedValues():
+    def __init__(self, y_true, y_predicted, model_name, id_person_out ):
+        self.y_true = y_true
+        self.y_predicted = y_predicted
+        self.model_name = model_name
+        self.id_person_out = id_person_out
+
+    def calc_metrics(self):
+        model_metrics = my_metrics.ModelMetrics(self.y_true, self.y_predicted)
+        return model_metrics
+
+    def is_patient(self):
+        return self.__get_class_person(self.id_person_out) == "patient"
+
+    def __get_class_person(self, id):
+        result = id.split("_")[0]
+        return result
+
+
+
+def metric_values(person_list):
+    result_df_lopo_per_person = pd.DataFrame()
+
+    for person_values in person_list:
+
+        acc = person_values.calc_metrics().accuracy()
+
+        precision_micro = person_values.calc_metrics().precision("micro")
+        precision_macro = person_values.calc_metrics().precision("macro")
+        precision = person_values.calc_metrics().precision()
+
+        recall = person_values.calc_metrics().recall(average='micro')
+        f1_score = person_values.calc_metrics().f1_score(average='micro')
+        mcc = person_values.calc_metrics().matthews_corrcoef()
+
+        if person_values.is_patient():
+            person_class = "Patient"
+        else:
+            person_class = "Control"
+
+        result_metrics_dict = dict()
+        result_metrics_dict["model"] = "CNN"
+        result_metrics_dict["class"] = person_class
+
+        result_metrics_dict["accuracy"] = acc
+        result_metrics_dict["precision"] = precision_micro
+        result_metrics_dict["f1-score"] = f1_score
+        result_metrics_dict["recall"] = recall
+        result_metrics_dict["mcc"] = mcc
+
+        result_df_lopo_per_person = result_df_lopo_per_person.append(result_metrics_dict, ignore_index=True)
+
+
+    return result_df_lopo_per_person
+
+def average_metric_values(df_class_person):
+
+    mean_acc = df_class_person[["accuracy"]].mean()
+    mean_precision = df_class_person[["precision"]].mean()
+    mean_recall = df_class_person[["recall"]].mean()
+    mean_f1_score = df_class_person[["f1-score"]].mean()
+    mcc_mean = df_class_person[['mcc']].mean()
+
+    #columns output
+    result = dict()
+    result["model"] = df_class_person["model"].unique()
+    result["class"] = df_class_person["class"].unique()
+    result['accuracy'] = mean_acc[0]
+    result['precision'] = mean_precision[0]
+    result['recall'] = mean_recall[0]
+    result['f1-score'] = mean_f1_score[0]
+
+    return result
+
+def metric_calculation(predicted_values_dict):
+    result_df = pd.DataFrame()
+
+    #filter the list and return values for each class
+    control_person = [person_values for person_values in predicted_values_dict
+                      if person_values.is_patient() == False]
+
+    patient_person = [person_values for person_values in predicted_values_dict
+                      if person_values.is_patient() == True]
+
+    #control
+    control_metrics = metric_values(control_person)
+    result_metics_control = average_metric_values(control_metrics)
+    result_df = result_df.append(result_metics_control, ignore_index=True)
+
+    #patient
+    patient_metrics = metric_values(patient_person)
+    result_metics_patient = average_metric_values(patient_metrics)
+    result_df = result_df.append(result_metics_patient, ignore_index=True)
+
+    #weighted
+    weighted_metrics = metric_values(predicted_values_dict)
+    result_metics_weighted = average_metric_values(weighted_metrics)
+    result_df = result_df.append(result_metics_weighted, ignore_index=True)
+
+    print(tabulate(result_df, headers='keys', tablefmt='psql'))
+
+## end - metrics
 
 def model_predict_lpgo(df_dataset, shuffle=True, random_state=2018):
     # metrics initialise
@@ -146,6 +252,15 @@ def model_predict_lpgo(df_dataset, shuffle=True, random_state=2018):
     fold_no = 0
     groups = np.unique(df_dataset['user'])
     persons = np.unique(groups)
+
+    #first 6 persons to make it fast to run and debug
+    '''
+    import random
+    random.shuffle(persons)
+    persons = persons[:6]
+    '''
+
+    list_predicted_values = list()
 
     start_time = datetime.now()
 
@@ -238,6 +353,11 @@ def model_predict_lpgo(df_dataset, shuffle=True, random_state=2018):
         # f1_scores_full.append(f1_score)
         acc.append(accuracy)
         acc_nmov.append(accuracy_nmov)
+
+        #collecting values to calculate the metrics
+        predicted_values_obj = PredictedValues(y_test_arg, y_predicted_arg, model.name, person)
+        list_predicted_values.append(predicted_values_obj)
+    metric_calculation(list_predicted_values)
 
     print(f" full test acc metrics with person list:  mean_acc: {np.mean(acc)} mean_no_mov_avg_acc: {np.mean(acc_nmov)} persons {persons_score}  acc: {acc}")
 

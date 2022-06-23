@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn import metrics
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, average_precision_score, balanced_accuracy_score
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, precision_recall_fscore_support, \
     classification_report, matthews_corrcoef
 
@@ -13,15 +13,19 @@ class ModelMetrics:
     def accuracy(self):
         return accuracy_score(self.y_true, self.y_preds.round())
 
-    def precision(self):
-        return precision_score(self.y_true, self.y_preds.round(), average="binary")
+    def balanced_accuracy(self):
+        return balanced_accuracy_score(self.y_true, self.y_preds.round())
 
-    def average_precision_score(self):
+    def precision(self, average="binary"):
+        return precision_score(self.y_true, self.y_preds.round(), average=average)
+
+    def average_precision_score(self, average='macro'):
         '''
         This metric is used in the paper for Experiment I
+        average default = macro
         :return:
         '''
-        return metrics.average_precision_score(self.y_true, self.y_preds)
+        return average_precision_score(self.y_true, self.y_preds, average = average)
 
     def recall(self, average= "binary"):
         return recall_score(self.y_true, self.y_preds.round(), average = average)
@@ -58,6 +62,7 @@ class ModelMetrics:
     def all_metrics(self):
         all_metrics = {}
         all_metrics["accuracy"] = self.accuracy()
+        all_metrics["balanced_accuracy"] = self.balanced_accuracy()
         all_metrics["precision"] = self.precision()
         all_metrics["average_precision"] = self.average_precision_score()
         all_metrics["recall"] = self.recall()
@@ -66,6 +71,7 @@ class ModelMetrics:
         all_metrics["classification_report"] = self.classification_report()
         all_metrics["auc_roc"] = self.auc_roc()
         all_metrics["matthews_corrcoef"] = self.matthews_corrcoef()
+        all_metrics["matthews_corrcoef"] = self.average_precision_score()
 
         return all_metrics
 
