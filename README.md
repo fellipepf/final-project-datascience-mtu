@@ -59,7 +59,10 @@ $ git clone https://github.com/fellipepf/final-project-datascience-mtu.git
    </tr>  
   
    <tr>  
-      <td>psykose_machine_learning_models.py</td>   
+      <td>
+
+[psykose_machine_learning_models.py](./code/psykose_machine_learning_models.py)
+     </td>   
       <td>Contains the ML models</td>  
    </tr>  
    <tr>  
