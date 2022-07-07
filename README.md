@@ -13,9 +13,10 @@ Fellipe Paes Ferreira, Aengus Daly
 1. [Introduction](#introduction)  
 2. [Software requirements](#software-requirements)  
 3. [Software build](#software-build)  
+4. [Project files description](#project-files-description)  
 
 ---  
-## Introduction
+## 1. Introduction
   
 This study aims to identify the presence of schizophrenia through the analysis of data collected through a wristwatch with a motor activities sensor using machine learning techniques.  
   
@@ -24,18 +25,18 @@ This study aims to identify the presence of schizophrenia through the analysis o
 
 
   
-## Software requirements
+## 2. Software requirements
 Python 3.9  
   
   
-## Software build
+## 3. Software build
 Step 1: Get sources from GitHub 
 ```shell   
 $ git clone https://github.com/fellipepf/final-project-datascience-mtu.git
  
 ```  
   
-## Project files description [![](./docs/img/pin.svg)](#software-build)  
+## 4. Project files description
   
 * Feature Engineering and EDA
 
@@ -50,7 +51,7 @@ $ git clone https://github.com/fellipepf/final-project-datascience-mtu.git
 |---------------------------------------------------------------------------------|-------------------------------------------------------------------------------|                 
 | [psykose_machine_learning_models.py](./code/psykose_machine_learning_models.py) | Contains the ML models for 10-Fold Cross-Validation and LOO using One Day Out |
 | [psykose_machine_learning_loo.py](./code/psykose_machine_learning_loo.py)       | ML models for LOPO - leave one person out                                     |
-| [psykose_machine_learning_hyperparameters.py](./code/psykose_machine_learning_hyperparameters.py)                                 | Perform the models hyper parameters tuning                                    |
+| [hyperparameter_tuning.py](./code/hyperparameter_tuning.py)                                 | Perform the models hyper parameters tuning                                    |
 
 - Deep Learning  
 
