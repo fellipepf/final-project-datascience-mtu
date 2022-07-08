@@ -1,6 +1,4 @@
 import os
-os.environ['TF_KERAS'] = '1'
-import os
 from keras.models import Sequential
 from keras.optimizers import SGD
 from keras.layers import Flatten, Input, BatchNormalization, Activation, Add, Cropping2D
@@ -21,11 +19,9 @@ def build_model(input_layer, filters, init, kernel):
 
     pad = 'same' # 'valid'
 
-    # x = Conv1D(filters*1, kernel_size = kernel, activation='relu', padding=pad, kernel_initializer=init)(input_shape=input_layer)
     x = Conv2D(filters*1, kernel_size = kernel, activation='relu', padding=pad, kernel_initializer=init)(input_layer)
     x = Conv2D(filters*1, kernel_size = kernel, activation='relu', padding=pad, kernel_initializer=init)(x)
     x = BatchNormalization()(x)
-    # x = AveragePooling1D(pool_size=2, strides=1)(x)
     x = AveragePooling2D(pool_size=(2,1))(x)
 
     x = Conv2D(filters*1, kernel_size = kernel, activation='relu', padding=pad, kernel_initializer=init)(x)
@@ -55,9 +51,6 @@ def cnn_2D(n_timesteps, n_features, kernel):
 
     input_layer = Input((n_timesteps, n_features,1))
     output_layer = build_model(input_layer, filters, init, kernel=kernel)
-
-
-    # sgd = SGD(lr=0.001, momentum=0.9, nesterov=True)
 
     model = Model(input_layer, output_layer)
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
