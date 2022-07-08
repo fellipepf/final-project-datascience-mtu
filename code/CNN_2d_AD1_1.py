@@ -10,7 +10,6 @@ from keras.layers.pooling import AveragePooling2D, MaxPooling2D, GlobalAveragePo
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
 from keras import initializers
-from keras_radam import RAdam # Note need os.environ['TF_KERAS'] = '1' above
 import keras.backend as K
 
 filters = 64
@@ -41,9 +40,7 @@ def build_model(input_layer, filters, init, kernel):
 
     x = Conv2D(filters=2, kernel_size=(2,2), strides= (1,1), activation="relu", padding='valid', kernel_initializer=init)(x)
 
-    # x = AveragePooling1D(pool_size=4)(x)
     x = AveragePooling2D(pool_size=(K.int_shape(x)[-3],1))(x)
-    # x = (AveragePooling2D(pool_size=(8, 1), strides=(1, 1), padding='valid'))(x) #original
 
     x = Activation(("softmax"))(x)
 
@@ -59,15 +56,12 @@ def cnn_2D(n_timesteps, n_features, kernel):
     input_layer = Input((n_timesteps, n_features,1))
     output_layer = build_model(input_layer, filters, init, kernel=kernel)
 
-    BatchSize = 4096
 
     # sgd = SGD(lr=0.001, momentum=0.9, nesterov=True)
 
     model = Model(input_layer, output_layer)
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    # model.compile(loss='binary_crossentropy', optimizer=RAdam(), metrics=['accuracy'])
-
-    # print(model.summary())
+ 
 
     return(model)
 
