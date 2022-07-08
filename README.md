@@ -18,7 +18,8 @@ Fellipe Paes Ferreira, Aengus Daly
 ---  
 ## 1. Introduction
   
-This study aims to identify the presence of schizophrenia through the analysis of data collected through a wristwatch with a motor activities sensor using machine learning techniques.  
+This study aims to identify the presence of schizophrenia through the analysis of data collected through a wristwatch with a motor activities sensor using machine learning techniques.<br />
+A research paper outlining this work is due to be presented at CBMS 2022 Conference, 21-23 July, Shenzhen, China.
   
 ---  
   
